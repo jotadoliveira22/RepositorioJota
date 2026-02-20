@@ -7,7 +7,7 @@ import os
 import asyncio
 from typing import AsyncIterator
 
-import anthropic
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
@@ -68,41 +68,72 @@ class ValidateUrlsRequest(BaseModel):
 # Helper: Claude streaming call
 # ---------------------------------------------------------------------------
 
+GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-2.0-flash:streamGenerateContent?alt=sse&key={key}"
+)
+
+
 async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[str, str]]:
     """
     Yields (event_type, data) tuples:
       - ("text", "...") for streaming text chunks
       - ("done", json_string) when finished
       - ("error", message) on error
+    Uses Google Gemini REST API via httpx.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        yield ("error", "ANTHROPIC_API_KEY not set in environment")
+        yield ("error", "GEMINI_API_KEY not set in environment")
         return
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-    full_text = ""
+    url = GEMINI_URL.format(key=api_key)
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
+        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.7},
+    }
 
+    full_text = ""
     try:
-        async with client.messages.stream(
-            model="claude-opus-4-6",
-            max_tokens=8000,
-            thinking={"type": "adaptive"},
-            system=system,
-            messages=[{"role": "user", "content": user_msg}],
-        ) as stream:
-            async for text in stream.text_stream:
-                full_text += text
-                yield ("text", text)
+        async with httpx.AsyncClient(timeout=300) as client:
+            async with client.stream("POST", url, json=payload) as response:
+                if response.status_code == 400:
+                    yield ("error", "Solicitud inválida a la API de Gemini.")
+                    return
+                if response.status_code == 401 or response.status_code == 403:
+                    yield ("error", "API key inválida. Revisa GEMINI_API_KEY.")
+                    return
+                if response.status_code == 429:
+                    yield ("error", "Rate limit alcanzado. Intenta en unos momentos.")
+                    return
+                if response.status_code != 200:
+                    yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
+                    return
+
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    raw = line[6:].strip()
+                    if not raw or raw == "[DONE]":
+                        continue
+                    try:
+                        chunk = json.loads(raw)
+                        for candidate in chunk.get("candidates", []):
+                            for part in candidate.get("content", {}).get("parts", []):
+                                text = part.get("text", "")
+                                if text:
+                                    full_text += text
+                                    yield ("text", text)
+                    except json.JSONDecodeError:
+                        continue
 
         yield ("done", full_text)
 
-    except anthropic.AuthenticationError:
-        yield ("error", "API key inválida. Revisa ANTHROPIC_API_KEY.")
-    except anthropic.RateLimitError:
-        yield ("error", "Rate limit alcanzado. Intenta en unos momentos.")
-    except anthropic.APIConnectionError:
-        yield ("error", "Error de conexión con la API de Anthropic.")
+    except httpx.ConnectError:
+        yield ("error", "Error de conexión con la API de Gemini.")
+    except httpx.TimeoutException:
+        yield ("error", "Timeout al conectar con la API de Gemini.")
     except Exception as exc:
         yield ("error", f"Error inesperado: {str(exc)}")
 
