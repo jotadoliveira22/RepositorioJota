@@ -107,10 +107,22 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                         yield ("error", "API key inválida. Revisa GEMINI_API_KEY.")
                         return
                     if response.status_code == 429:
+                        body = await response.aread()
+                        try:
+                            err_msg = json.loads(body).get("error", {}).get("message", "").lower()
+                        except Exception:
+                            err_msg = ""
+                        is_billing = any(k in err_msg for k in ("billing", "exceeded your current quota", "quota_exceeded"))
+                        if is_billing:
+                            yield ("error", (
+                                "Cuota de API agotada. Activa la facturación en Google Cloud Console "
+                                "o revisa tu plan en aistudio.google.com."
+                            ))
+                            return
                         if attempt < 3:
                             await asyncio.sleep(15)
                             continue
-                        yield ("error", "Rate limit alcanzado. Intenta en unos momentos.")
+                        yield ("error", "Rate limit alcanzado tras 3 intentos. Espera un momento y vuelve a intentarlo.")
                         return
                     if response.status_code != 200:
                         yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
