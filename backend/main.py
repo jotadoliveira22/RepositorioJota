@@ -81,6 +81,7 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
       - ("done", json_string) when finished
       - ("error", message) on error
     Uses Google Gemini REST API via httpx.
+    Retries up to 3 times on rate limit (429) with 15s backoff.
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -94,48 +95,56 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
         "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.7},
     }
 
-    full_text = ""
-    try:
-        async with httpx.AsyncClient(timeout=300) as client:
-            async with client.stream("POST", url, json=payload) as response:
-                if response.status_code == 400:
-                    yield ("error", "Solicitud inválida a la API de Gemini.")
-                    return
-                if response.status_code == 401 or response.status_code == 403:
-                    yield ("error", "API key inválida. Revisa GEMINI_API_KEY.")
-                    return
-                if response.status_code == 429:
-                    yield ("error", "Rate limit alcanzado. Intenta en unos momentos.")
-                    return
-                if response.status_code != 200:
-                    yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
-                    return
+    for attempt in range(4):
+        full_text = ""
+        try:
+            async with httpx.AsyncClient(timeout=300) as client:
+                async with client.stream("POST", url, json=payload) as response:
+                    if response.status_code == 400:
+                        yield ("error", "Solicitud inválida a la API de Gemini.")
+                        return
+                    if response.status_code in (401, 403):
+                        yield ("error", "API key inválida. Revisa GEMINI_API_KEY.")
+                        return
+                    if response.status_code == 429:
+                        if attempt < 3:
+                            await asyncio.sleep(15)
+                            continue
+                        yield ("error", "Rate limit alcanzado. Intenta en unos momentos.")
+                        return
+                    if response.status_code != 200:
+                        yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
+                        return
 
-                async for line in response.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    raw = line[6:].strip()
-                    if not raw or raw == "[DONE]":
-                        continue
-                    try:
-                        chunk = json.loads(raw)
-                        for candidate in chunk.get("candidates", []):
-                            for part in candidate.get("content", {}).get("parts", []):
-                                text = part.get("text", "")
-                                if text:
-                                    full_text += text
-                                    yield ("text", text)
-                    except json.JSONDecodeError:
-                        continue
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        raw = line[6:].strip()
+                        if not raw or raw == "[DONE]":
+                            continue
+                        try:
+                            chunk = json.loads(raw)
+                            for candidate in chunk.get("candidates", []):
+                                for part in candidate.get("content", {}).get("parts", []):
+                                    text = part.get("text", "")
+                                    if text:
+                                        full_text += text
+                                        yield ("text", text)
+                        except json.JSONDecodeError:
+                            continue
 
-        yield ("done", full_text)
+            yield ("done", full_text)
+            return
 
-    except httpx.ConnectError:
-        yield ("error", "Error de conexión con la API de Gemini.")
-    except httpx.TimeoutException:
-        yield ("error", "Timeout al conectar con la API de Gemini.")
-    except Exception as exc:
-        yield ("error", f"Error inesperado: {str(exc)}")
+        except httpx.ConnectError:
+            yield ("error", "Error de conexión con la API de Gemini.")
+            return
+        except httpx.TimeoutException:
+            yield ("error", "Timeout al conectar con la API de Gemini.")
+            return
+        except Exception as exc:
+            yield ("error", f"Error inesperado: {str(exc)}")
+            return
 
 
 def parse_json_result(raw: str, agent_name: str) -> dict:
