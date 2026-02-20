@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agent Research Platform</title>
+<style>
+/* ─── Reset & Base ─────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0f1a;
+  --surface:#131929;
+  --card:#1a2236;
+  --border:#242e45;
+  --accent:#3b82f6;
+  --accent2:#8b5cf6;
+  --success:#22c55e;
+  --warn:#f59e0b;
+  --error:#ef4444;
+  --text:#e2e8f0;
+  --muted:#64748b;
+  --light:#94a3b8;
+  --radius:10px;
+  --font:'Inter',system-ui,sans-serif;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;display:flex;flex-direction:column}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ─── Header ────────────────────────────────────────────────────────────── */
+#header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;height:52px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.header-right{display:flex;align-items:center;gap:12px}
+.run-badge{font-size:11px;color:var(--muted);padding:3px 8px;border:1px solid var(--border);border-radius:20px}
+
+/* ─── Main Layout ───────────────────────────────────────────────────────── */
+#main{display:flex;flex:1;overflow:hidden}
+#sidebar{width:290px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:16px}
+#workspace{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#agents-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+#results-area{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0 16px 16px}
+
+/* ─── Sidebar Sections ──────────────────────────────────────────────────── */
+.section{margin-bottom:20px}
+.section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--light);margin-bottom:5px;font-weight:500}
+.field input[type=text],.field textarea,.field select{
+  width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;
+  color:var(--text);padding:8px 10px;font-size:13px;font-family:var(--font);outline:none;
+  transition:border-color .2s;
+}
+.field input[type=text]:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
+.field textarea{resize:vertical;min-height:70px}
+.field select option{background:var(--card)}
+
+/* Radio / Checkbox groups */
+.radio-group,.check-group{display:flex;flex-wrap:wrap;gap:6px}
+.radio-group label,.check-group label{
+  display:flex;align-items:center;gap:5px;cursor:pointer;
+  background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:5px 10px;font-size:12px;transition:all .15s;user-select:none;
+}
+.radio-group label:hover,.check-group label:hover{border-color:var(--accent)}
+.radio-group input,.check-group input{display:none}
+.radio-group label.active,.check-group label.active{
+  background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent)
+}
+
+/* Toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.toggle-row span{font-size:12px;color:var(--light)}
+.toggle{position:relative;width:36px;height:20px}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:20px;cursor:pointer;transition:.2s}
+.toggle-slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:white;border-radius:50%;transition:.2s}
+.toggle input:checked+.toggle-slider{background:var(--accent)}
+.toggle input:checked+.toggle-slider:before{transform:translateX(16px)}
+
+/* Rejected URL list */
+.rejected-list{margin-top:6px}
+.rejected-item{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:5px;padding:4px 8px;font-size:11px;color:#f87171;margin-bottom:4px;word-break:break-all}
+.approved-item{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:5px;padding:4px 8px;font-size:11px;color:#4ade80;margin-bottom:4px}
+
+/* ─── Buttons ───────────────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 14px;
+  border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;
+  border:none;font-family:var(--font);transition:all .15s;outline:none;
+}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--light)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+.btn-ghost:disabled{opacity:.4;cursor:not-allowed}
+.btn-success{background:var(--success);color:#fff}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-pipeline{
+  width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff;padding:10px;font-size:14px;font-weight:600;border-radius:8px;
+  justify-content:center;
+}
+.btn-pipeline:hover{opacity:.9}
+.btn-pipeline:disabled{opacity:.45;cursor:not-allowed}
+
+/* ─── Agent Cards ───────────────────────────────────────────────────────── */
+.agent-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color .2s;
+}
+.agent-card.running{border-color:var(--accent);box-shadow:0 0 0 1px rgba(59,130,246,.2)}
+.agent-card.done{border-color:rgba(34,197,94,.4)}
+.agent-card.error{border-color:rgba(239,68,68,.4)}
+
+.agent-header{display:flex;align-items:center;justify-content:space-between}
+.agent-name{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px}
+.agent-icon{font-size:16px}
+.agent-desc{font-size:11px;color:var(--muted)}
+
+.status-badge{
+  font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;
+  text-transform:uppercase;letter-spacing:.06em;
+}
+.status-idle{background:var(--border);color:var(--muted)}
+.status-running{background:rgba(59,130,246,.2);color:var(--accent);animation:pulse 1.5s infinite}
+.status-done{background:rgba(34,197,94,.15);color:var(--success)}
+.status-error{background:rgba(239,68,68,.15);color:var(--error)}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+.agent-controls{display:flex;gap:6px;align-items:center}
+.agent-preview{
+  font-size:11px;color:var(--muted);background:var(--surface);
+  border-radius:5px;padding:6px 8px;max-height:48px;overflow:hidden;
+  line-height:1.5;border:1px solid var(--border);white-space:pre-wrap;
+  word-break:break-word;
+}
+.agent-preview.streaming{border-color:rgba(59,130,246,.3);color:var(--light)}
+
+/* Pipeline controls bar */
+.pipeline-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);
+}
+.pipeline-actions{display:flex;gap:8px}
+
+/* ─── Results Panel ─────────────────────────────────────────────────────── */
+.results-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 0 8px;flex-shrink:0;
+}
+.tabs{display:flex;gap:4px}
+.tab{
+  padding:5px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;
+  color:var(--muted);border:1px solid transparent;transition:all .15s;
+}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--card);border-color:var(--border);color:var(--text)}
+
+.tab-actions{display:flex;gap:6px}
+.results-body{flex:1;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)}
+.tab-content{display:none;padding:16px;height:100%}
+.tab-content.active{display:block}
+
+/* Research tab */
+.research-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.research-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+.research-card h4{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+.research-card p,.research-card .text{font-size:13px;color:var(--light);line-height:1.7}
+.fact-list,.source-list{list-style:none}
+.fact-item{padding:4px 0;font-size:12px;color:var(--light);border-bottom:1px solid var(--border);line-height:1.5}
+.fact-item:last-child{border-bottom:none}
+.fact-item:before{content:'→ ';color:var(--accent)}
+.source-item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--border)}
+.source-item:last-child{border-bottom:none}
+.tier-badge{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:600}
+.tier-1{background:rgba(139,92,246,.2);color:#a78bfa}
+.tier-2{background:rgba(59,130,246,.2);color:#60a5fa}
+.tier-3{background:rgba(100,116,139,.2);color:#94a3b8}
+.confidence-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.confidence-high{background:rgba(34,197,94,.15);color:var(--success)}
+.confidence-medium{background:rgba(245,158,11,.15);color:var(--warn)}
+.confidence-low{background:rgba(239,68,68,.15);color:var(--error)}
+.keyword-cloud{display:flex;flex-wrap:wrap;gap:5px}
+.keyword{padding:3px 8px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:4px;font-size:11px;color:#93c5fd}
+
+/* Insights tab */
+.insight-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px}
+.insight-card h4{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.insight-card .evidence{font-size:11px;color:var(--muted);margin-bottom:4px}
+.insight-card .implication{font-size:12px;color:var(--accent)}
+.viral-card{background:var(--surface);border-left:3px solid var(--accent2);padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:8px}
+.viral-card h4{font-size:13px;font-weight:600;margin-bottom:4px}
+.viral-card .why{font-size:12px;color:var(--light)}
+.hook-item{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:13px;color:var(--text);position:relative}
+.hook-item .copy-hook{position:absolute;right:8px;top:8px;opacity:0;transition:.2s}
+.hook-item:hover .copy-hook{opacity:1}
+.score-bar{display:flex;align-items:center;gap:10px;margin-top:8px}
+.score-num{font-size:24px;font-weight:700;color:var(--accent)}
+.score-label{font-size:12px;color:var(--muted)}
+
+/* Draft / Final tabs (writer/optimizer content) */
+.format-tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
+.format-tab{padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border);color:var(--muted);transition:all .15s}
+.format-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.format-panel{display:none}
+.format-panel.active{display:block}
+.content-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px}
+.content-block h4{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px}
+.content-block pre{font-size:13px;color:var(--light);white-space:pre-wrap;word-break:break-word;line-height:1.7;font-family:var(--font)}
+.ab-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.ab-variant{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px}
+.ab-variant .ab-label{font-size:10px;font-weight:700;color:var(--accent);margin-bottom:5px;letter-spacing:.08em}
+.compliance-item{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:8px 12px;margin-bottom:6px}
+.compliance-item .ci-issue{font-size:12px;color:var(--warn);font-weight:600}
+.compliance-item .ci-fix{font-size:12px;color:var(--light);margin-top:3px}
+
+/* Logs tab */
+.log-list{font-family:monospace;font-size:12px}
+.log-entry{padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+.log-time{color:var(--muted);flex-shrink:0}
+.log-level{flex-shrink:0;width:40px;font-weight:600}
+.log-level.info{color:var(--accent)}
+.log-level.error{color:var(--error)}
+.log-level.warn{color:var(--warn)}
+.log-msg{color:var(--light);word-break:break-all}
+
+/* Empty state */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted)}
+.empty-state .e-icon{font-size:40px}
+.empty-state h3{font-size:15px;color:var(--light)}
+.empty-state p{font-size:12px;text-align:center;max-length:280px}
+
+/* Streaming preview big */
+.stream-preview{
+  font-size:12px;color:var(--light);white-space:pre-wrap;word-break:break-word;
+  line-height:1.6;padding:12px;height:100%;overflow-y:auto;
+}
+
+/* Notification toast */
+#toast{
+  position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:10px 16px;font-size:13px;color:var(--text);
+  box-shadow:0 4px 20px rgba(0,0,0,.4);transform:translateY(60px);opacity:0;
+  transition:all .3s;z-index:1000;max-width:300px;
+}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.success{border-color:var(--success)}
+#toast.error{border-color:var(--error)}
+
+/* Responsive */
+@media(max-width:1100px){#agents-row{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:800px){#sidebar{width:100%;max-height:300px}#main{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<!-- ───────────────── HEADER ──────────────────────────────────────────── -->
+<div id="header">
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    Agent Research Platform
+  </div>
+  <div class="header-right">
+    <span class="run-badge" id="run-label">Sin run activo</span>
+    <button class="btn btn-ghost btn-sm" onclick="openHistory()">📂 Historial</button>
+  </div>
+</div>
+
+<!-- ───────────────── PIPELINE BAR ───────────────────────────────────── -->
+<div class="pipeline-bar">
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="btn btn-pipeline" id="btn-pipeline" onclick="runPipeline()" style="width:auto;padding:8px 20px">
+      ▶ Run Full Pipeline
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="resetAll()">↺ Reset</button>
+  </div>
+  <div class="pipeline-actions">
+    <button class="btn btn-ghost btn-sm" id="btn-copy" onclick="copyOutput()" disabled>📋 Copy Output</button>
+    <button class="btn btn-ghost btn-sm" id="btn-export-json" onclick="exportJSON()" disabled>⬇ JSON</button>
+    <button class="btn btn-ghost btn-sm" id="btn-export-md" onclick="exportMarkdown()" disabled>⬇ Markdown</button>
+  </div>
+</div>
+
+<!-- ───────────────── MAIN LAYOUT ────────────────────────────────────── -->
+<div id="main">
+
+  <!-- ── SIDEBAR (Config) ─────────────────────────────────────────────── -->
+  <div id="sidebar">
+
+    <div class="section">
+      <div class="section-title">🔍 Tópico</div>
+      <div class="field">
+        <label>¿Qué quieres investigar hoy?</label>
+        <textarea id="cfg-topic" placeholder="Ej: Cómo los agentes de IA están cambiando el marketing digital en 2025..." rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label>Categoría</label>
+        <select id="cfg-category">
+          <option value="ai_news">AI News Radar</option>
+          <option value="viral_campaigns">Viral Campaigns Watch</option>
+          <option value="ads_intelligence">Ads Intelligence</option>
+          <option value="digital_marketing">Digital Marketing Playbooks</option>
+          <option value="marketing_strategy">Marketing Strategy &amp; Fundamentals</option>
+          <option value="custom">Custom Topic</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">⚙ Preferencias</div>
+
+      <div class="field">
+        <label>Idioma</label>
+        <div class="radio-group" id="rg-lang">
+          <label class="active"><input type="radio" name="lang" value="ES+EN" checked>ES+EN</label>
+          <label><input type="radio" name="lang" value="ES">ES</label>
+          <label><input type="radio" name="lang" value="EN">EN</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Objetivo</label>
+        <div class="radio-group" id="rg-obj">
+          <label class="active"><input type="radio" name="obj" value="Organic" checked>Orgánico</label>
+          <label><input type="radio" name="obj" value="Ads">Ads</label>
+          <label><input type="radio" name="obj" value="Asesoría">Asesoría</label>
+          <label><input type="radio" name="obj" value="News">News</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Formatos a generar</label>
+        <div class="check-group" id="cg-formats">
+          <label class="active"><input type="checkbox" value="Reel" checked>Reel</label>
+          <label class="active"><input type="checkbox" value="Carousel" checked>Carrusel</label>
+          <label class="active"><input type="checkbox" value="LinkedIn" checked>LinkedIn</label>
+          <label><input type="checkbox" value="Newsletter">Newsletter</label>
+          <label><input type="checkbox" value="Ads">Ads</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Tono</label>
+        <div class="radio-group" id="rg-tone">
+          <label><input type="radio" name="tone" value="irreverent">😈 Irreverente</label>
+          <label><input type="radio" name="tone" value="educational">📚 Educativo</label>
+          <label class="active"><input type="radio" name="tone" value="professional" checked>💼 Profesional</label>
+          <label><input type="radio" name="tone" value="sales">💰 Ventas</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Longitud</label>
+        <div class="radio-group" id="rg-length">
+          <label><input type="radio" name="len" value="short">Corto</label>
+          <label class="active"><input type="radio" name="len" value="medium" checked>Medio</label>
+          <label><input type="radio" name="len" value="long">Largo</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📡 Fuentes</div>
+      <div class="toggle-row">
+        <span>Strict sources only</span>
+        <label class="toggle"><input type="checkbox" id="cfg-strict" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="field">
+        <label>URLs extra (separadas por línea)</label>
+        <textarea id="cfg-urls" placeholder="https://example.com/article..." rows="3"></textarea>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;width:100%" onclick="validateURLs()">Validar URLs</button>
+        <div id="url-validation-result" class="rejected-list"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🤖 Agentes</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="toggle-row"><span>Scout</span><label class="toggle"><input type="checkbox" id="en-scout" checked><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><span>Analyst</span><label class="toggle"><input type="checkbox" id="en-analyst" checked><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><span>Writer</span><label class="toggle"><input type="checkbox" id="en-writer" checked><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><span>Optimizer</span><label class="toggle"><input type="checkbox" id="en-optimizer" checked><span class="toggle-slider"></span></label></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WORKSPACE (Agents + Results) ─────────────────────────────────── -->
+  <div id="workspace">
+
+    <!-- Agent Cards -->
+    <div id="agents-row">
+
+      <!-- Scout -->
+      <div class="agent-card" id="card-scout">
+        <div class="agent-header">
+          <div class="agent-name"><span class="agent-icon">📡</span> Scout</div>
+          <span class="status-badge status-idle" id="badge-scout">IDLE</span>
+        </div>
+        <div class="agent-desc">Research · Trend Hunter</div>
+        <div class="agent-preview" id="preview-scout">Investigación pendiente...</div>
+        <div class="agent-controls">
+          <button class="btn btn-ghost btn-sm" id="run-scout" onclick="runAgent('scout')">▶ Run</button>
+        </div>
+      </div>
+
+      <!-- Analyst -->
+      <div class="agent-card" id="card-analyst">
+        <div class="agent-header">
+          <div class="agent-name"><span class="agent-icon">🧠</span> Analyst</div>
+          <span class="status-badge status-idle" id="badge-analyst">IDLE</span>
+        </div>
+        <div class="agent-desc">Strategist · Insight Extractor</div>
+        <div class="agent-preview" id="preview-analyst">Requiere Scout completado.</div>
+        <div class="agent-controls">
+          <button class="btn btn-ghost btn-sm" id="run-analyst" onclick="runAgent('analyst')">▶ Run</button>
+        </div>
+      </div>
+
+      <!-- Writer -->
+      <div class="agent-card" id="card-writer">
+        <div class="agent-header">
+          <div class="agent-name"><span class="agent-icon">✍️</span> Writer</div>
+          <span class="status-badge status-idle" id="badge-writer">IDLE</span>
+        </div>
+        <div class="agent-desc">Copywriter · Content Producer</div>
+        <div class="agent-preview" id="preview-writer">Requiere Analyst completado.</div>
+        <div class="agent-controls">
+          <button class="btn btn-ghost btn-sm" id="run-writer" onclick="runAgent('writer')">▶ Run</button>
+        </div>
+      </div>
+
+      <!-- Optimizer -->
+      <div class="agent-card" id="card-optimizer">
+        <div class="agent-header">
+          <div class="agent-name"><span class="agent-icon">🚀</span> Optimizer</div>
+          <span class="status-badge status-idle" id="badge-optimizer">IDLE</span>
+        </div>
+        <div class="agent-desc">Editor · Growth · Compliance</div>
+        <div class="agent-preview" id="preview-optimizer">Requiere Writer completado.</div>
+        <div class="agent-controls">
+          <button class="btn btn-ghost btn-sm" id="run-optimizer" onclick="runAgent('optimizer')">▶ Run</button>
+        </div>
+      </div>
+
+    </div><!-- /agents-row -->
+
+    <!-- Results Area -->
+    <div id="results-area">
+      <div class="results-header">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('research')">📊 Research</div>
+          <div class="tab" onclick="switchTab('insights')">💡 Insights</div>
+          <div class="tab" onclick="switchTab('draft')">✍️ Draft</div>
+          <div class="tab" onclick="switchTab('final')">🚀 Final</div>
+          <div class="tab" onclick="switchTab('logs')">📋 Logs</div>
+        </div>
+      </div>
+
+      <div class="results-body">
+        <!-- Research tab -->
+        <div class="tab-content active" id="tab-research">
+          <div class="empty-state" id="empty-research">
+            <div class="e-icon">📡</div>
+            <h3>Sin investigación aún</h3>
+            <p>Ejecuta el Scout Agent para ver los resultados de investigación aquí.</p>
+          </div>
+          <div id="research-content" style="display:none"></div>
+        </div>
+
+        <!-- Insights tab -->
+        <div class="tab-content" id="tab-insights">
+          <div class="empty-state" id="empty-insights">
+            <div class="e-icon">🧠</div>
+            <h3>Sin insights aún</h3>
+            <p>Ejecuta el Analyst Agent para ver los insights estratégicos aquí.</p>
+          </div>
+          <div id="insights-content" style="display:none"></div>
+        </div>
+
+        <!-- Draft tab -->
+        <div class="tab-content" id="tab-draft">
+          <div class="empty-state" id="empty-draft">
+            <div class="e-icon">✍️</div>
+            <h3>Sin contenido aún</h3>
+            <p>Ejecuta el Writing Agent para ver el borrador de contenido aquí.</p>
+          </div>
+          <div id="draft-content" style="display:none"></div>
+        </div>
+
+        <!-- Final tab -->
+        <div class="tab-content" id="tab-final">
+          <div class="empty-state" id="empty-final">
+            <div class="e-icon">🚀</div>
+            <h3>Sin versión final aún</h3>
+            <p>Ejecuta el Optimizer Agent para ver el contenido optimizado aquí.</p>
+          </div>
+          <div id="final-content" style="display:none"></div>
+        </div>
+
+        <!-- Logs tab -->
+        <div class="tab-content" id="tab-logs">
+          <div class="empty-state" id="empty-logs">
+            <div class="e-icon">📋</div>
+            <h3>Sin logs aún</h3>
+            <p>Los logs aparecerán aquí cuando ejecutes los agentes.</p>
+          </div>
+          <div class="log-list" id="logs-content"></div>
+        </div>
+      </div><!-- /results-body -->
+    </div><!-- /results-area -->
+  </div><!-- /workspace -->
+</div><!-- /main -->
+
+<div id="toast"></div>
+
+<script>
+// ─── State ─────────────────────────────────────────────────────────────────
+let currentRunId = null;
+let agentResults = { scout: null, analyst: null, writer: null, optimizer: null };
+let logs = [];
+let isPipelineRunning = false;
+let isAgentRunning = false;
+
+// ─── Radio/Checkbox UI ─────────────────────────────────────────────────────
+document.querySelectorAll('.radio-group').forEach(group => {
+  group.addEventListener('click', e => {
+    const lbl = e.target.closest('label');
+    if (!lbl) return;
+    group.querySelectorAll('label').forEach(l => l.classList.remove('active'));
+    lbl.classList.add('active');
+    lbl.querySelector('input').checked = true;
+  });
+});
+document.querySelectorAll('.check-group').forEach(group => {
+  group.addEventListener('click', e => {
+    const lbl = e.target.closest('label');
+    if (!lbl) return;
+    const inp = lbl.querySelector('input');
+    inp.checked = !inp.checked;
+    lbl.classList.toggle('active', inp.checked);
+  });
+});
+
+// ─── Read Config ───────────────────────────────────────────────────────────
+function getConfig() {
+  const formats = [];
+  document.querySelectorAll('#cg-formats input:checked').forEach(i => formats.push(i.value));
+  return {
+    topic: document.getElementById('cfg-topic').value.trim(),
+    category: document.getElementById('cfg-category').value,
+    language: document.querySelector('#rg-lang input:checked')?.value || 'ES+EN',
+    objective: document.querySelector('#rg-obj input:checked')?.value || 'Organic',
+    formats,
+    tone: document.querySelector('#rg-tone input:checked')?.value || 'professional',
+    length: document.querySelector('#rg-length input:checked')?.value || 'medium',
+    strict_sources: document.getElementById('cfg-strict').checked,
+    extra_urls: document.getElementById('cfg-urls').value.split('\n').map(s => s.trim()).filter(Boolean),
+    agents_enabled: {
+      scout: document.getElementById('en-scout').checked,
+      analyst: document.getElementById('en-analyst').checked,
+      writer: document.getElementById('en-writer').checked,
+      optimizer: document.getElementById('en-optimizer').checked,
+    }
+  };
+}
+
+// ─── Validate URLs ─────────────────────────────────────────────────────────
+async function validateURLs() {
+  const urls = document.getElementById('cfg-urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!urls.length) { showToast('No hay URLs para validar', 'warn'); return; }
+  const res = await fetch('/api/validate-sources', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ urls })
+  });
+  const data = await res.json();
+  const el = document.getElementById('url-validation-result');
+  el.innerHTML = '';
+  data.approved?.forEach(item => {
+    el.innerHTML += `<div class="approved-item">✓ ${escHtml(item.url)}</div>`;
+  });
+  data.rejected?.forEach(item => {
+    el.innerHTML += `<div class="rejected-item">✗ ${escHtml(item.url)} — ${escHtml(item.reason)}</div>`;
+  });
+}
+
+// ─── Create Run ────────────────────────────────────────────────────────────
+async function createRun() {
+  const config = getConfig();
+  if (!config.topic) { showToast('Escribe un tópico primero', 'error'); return null; }
+  const res = await fetch('/api/runs', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ config })
+  });
+  if (!res.ok) { showToast('Error creando run', 'error'); return null; }
+  const data = await res.json();
+
+  // Show rejected URLs if any
+  if (data.rejected_urls?.length) {
+    const el = document.getElementById('url-validation-result');
+    el.innerHTML = '';
+    data.rejected_urls.forEach(item => {
+      el.innerHTML += `<div class="rejected-item">✗ ${escHtml(item.url)} — RECHAZADA</div>`;
+    });
+    showToast(`${data.rejected_urls.length} URL(s) rechazada(s) — fuera de allowlist`, 'warn');
+  }
+
+  currentRunId = data.run_id;
+  document.getElementById('run-label').textContent = `Run: ${currentRunId.slice(0,8)}`;
+  addLog('info', `Run creado: ${currentRunId.slice(0,8)}`);
+  return data.run_id;
+}
+
+// ─── Stream an agent ───────────────────────────────────────────────────────
+async function streamAgent(runId, agentName) {
+  return new Promise((resolve, reject) => {
+    setAgentStatus(agentName, 'running');
+    let fullText = '';
+
+    const es = new EventSource(`/api/runs/${runId}/agents/${agentName}/stream`);
+
+    es.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+
+      if (data.type === 'text') {
+        fullText += data.content;
+        updateAgentPreview(agentName, fullText);
+      }
+      else if (data.type === 'done') {
+        es.close();
+        agentResults[agentName] = data.result;
+        setAgentStatus(agentName, 'done');
+        renderResult(agentName, data.result);
+        addLog('info', `${agentName} completado`);
+        resolve(data.result);
+      }
+      else if (data.type === 'error') {
+        es.close();
+        setAgentStatus(agentName, 'error');
+        updateAgentPreview(agentName, '❌ ' + data.error);
+        addLog('error', `${agentName}: ${data.error}`);
+        showToast(`Error en ${agentName}: ${data.error}`, 'error');
+        reject(new Error(data.error));
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      setAgentStatus(agentName, 'error');
+      addLog('error', `${agentName}: conexión perdida`);
+      reject(new Error('SSE connection error'));
+    };
+  });
+}
+
+// ─── Run Full Pipeline ─────────────────────────────────────────────────────
+async function runPipeline() {
+  if (isPipelineRunning || isAgentRunning) return;
+  isPipelineRunning = true;
+  setBusy(true);
+
+  const runId = await createRun();
+  if (!runId) { isPipelineRunning = false; setBusy(false); return; }
+
+  addLog('info', 'Pipeline iniciado');
+
+  return new Promise((resolve) => {
+    const es = new EventSource(`/api/runs/${runId}/pipeline/stream`);
+    const agentTexts = {};
+
+    es.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+
+      if (data.type === 'status') {
+        setAgentStatus(data.agent, data.status);
+      }
+      else if (data.type === 'text') {
+        agentTexts[data.agent] = (agentTexts[data.agent] || '') + data.content;
+        updateAgentPreview(data.agent, agentTexts[data.agent]);
+      }
+      else if (data.type === 'done') {
+        agentResults[data.agent] = data.result;
+        setAgentStatus(data.agent, 'done');
+        renderResult(data.agent, data.result);
+        addLog('info', `${data.agent} completado`);
+      }
+      else if (data.type === 'error') {
+        setAgentStatus(data.agent, 'error');
+        updateAgentPreview(data.agent, '❌ ' + data.error);
+        addLog('error', `${data.agent}: ${data.error}`);
+        showToast(`Error en ${data.agent}`, 'error');
+      }
+      else if (data.type === 'pipeline_done') {
+        es.close();
+        isPipelineRunning = false;
+        setBusy(false);
+        enableExports();
+        showToast('Pipeline completado ✓', 'success');
+        addLog('info', 'Pipeline finalizado con éxito');
+        resolve();
+      }
+      else if (data.type === 'pipeline_abort') {
+        es.close();
+        isPipelineRunning = false;
+        setBusy(false);
+        showToast(`Pipeline abortado: ${data.reason}`, 'error');
+        addLog('error', `Pipeline abortado: ${data.reason}`);
+        resolve();
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      isPipelineRunning = false;
+      setBusy(false);
+      addLog('error', 'Pipeline: conexión perdida');
+      showToast('Error de conexión en pipeline', 'error');
+      resolve();
+    };
+  });
+}
+
+// ─── Run single agent ──────────────────────────────────────────────────────
+async function runAgent(agentName) {
+  if (isPipelineRunning || isAgentRunning) return;
+
+  let runId = currentRunId;
+  if (!runId) {
+    runId = await createRun();
+    if (!runId) return;
+  }
+
+  // Check prerequisites
+  const prereqs = { analyst: 'scout', writer: 'analyst', optimizer: 'writer' };
+  const prereq = prereqs[agentName];
+  if (prereq && !agentResults[prereq]) {
+    showToast(`Ejecuta ${prereq} primero`, 'error');
+    return;
+  }
+
+  isAgentRunning = true;
+  setBusy(true);
+  try {
+    await streamAgent(runId, agentName);
+    enableExports();
+  } catch(e) {
+    // error already handled in streamAgent
+  }
+  isAgentRunning = false;
+  setBusy(false);
+}
+
+// ─── UI Helpers ────────────────────────────────────────────────────────────
+function setBusy(busy) {
+  document.getElementById('btn-pipeline').disabled = busy;
+  ['scout','analyst','writer','optimizer'].forEach(a => {
+    const btn = document.getElementById(`run-${a}`);
+    if(btn) btn.disabled = busy;
+  });
+}
+
+function setAgentStatus(agent, status) {
+  const card = document.getElementById(`card-${agent}`);
+  const badge = document.getElementById(`badge-${agent}`);
+  if (!card || !badge) return;
+  card.className = `agent-card ${status}`;
+  badge.className = `status-badge status-${status}`;
+  badge.textContent = status.toUpperCase();
+}
+
+function updateAgentPreview(agent, text) {
+  const el = document.getElementById(`preview-${agent}`);
+  if (!el) return;
+  // Show last 120 chars of streaming text
+  const preview = text.slice(-140).replace(/\n/g,' ');
+  el.textContent = preview || '...';
+  el.className = 'agent-preview streaming';
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['research','insights','draft','final','logs'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(`tab-${name}`)?.classList.add('active');
+}
+
+function enableExports() {
+  document.getElementById('btn-copy').disabled = false;
+  document.getElementById('btn-export-json').disabled = false;
+  document.getElementById('btn-export-md').disabled = false;
+}
+
+function addLog(level, message) {
+  logs.push({ level, message, time: new Date().toLocaleTimeString() });
+  const el = document.getElementById('logs-content');
+  document.getElementById('empty-logs').style.display = 'none';
+  el.innerHTML += `<div class="log-entry">
+    <span class="log-time">${logs[logs.length-1].time}</span>
+    <span class="log-level ${level}">${level.toUpperCase()}</span>
+    <span class="log-msg">${escHtml(message)}</span>
+  </div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── Render Results ────────────────────────────────────────────────────────
+function renderResult(agent, result) {
+  if (agent === 'scout') renderResearch(result);
+  if (agent === 'analyst') renderInsights(result);
+  if (agent === 'writer') renderDraft(result);
+  if (agent === 'optimizer') renderFinal(result);
+}
+
+function renderResearch(r) {
+  if (!r || r.parse_error) {
+    document.getElementById('research-content').innerHTML = `<div class="content-block"><h4>Raw Output</h4><pre>${escHtml(r?.raw || JSON.stringify(r))}</pre></div>`;
+    document.getElementById('empty-research').style.display = 'none';
+    document.getElementById('research-content').style.display = 'block';
+    return;
+  }
+  document.getElementById('empty-research').style.display = 'none';
+  const el = document.getElementById('research-content');
+  el.style.display = 'block';
+
+  const confidenceClass = r.confidence === 'high' ? 'confidence-high' : r.confidence === 'medium' ? 'confidence-medium' : 'confidence-low';
+  const sources = (r.sources_cited || []).map(s => `
+    <li class="source-item">
+      <span class="tier-badge tier-${s.tier}">T${s.tier}</span>
+      <span style="color:var(--light)">${escHtml(s.name)}</span>
+      <span style="color:var(--muted);font-size:11px">${escHtml(s.language||'')}</span>
+    </li>`).join('');
+
+  const facts = (r.key_facts || []).map(f => `<li class="fact-item">${escHtml(f)}</li>`).join('');
+  const keywords = (r.keywords || []).map(k => `<span class="keyword">${escHtml(k)}</span>`).join('');
+  const trends = (r.trends || []).map(t => `
+    <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:600;color:var(--text)">${escHtml(t.trend||t)}</div>
+      ${t.description ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${escHtml(t.description)}</div>` : ''}
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="confidence-badge ${confidenceClass}">
+        ${r.confidence === 'high' ? '✓' : r.confidence === 'medium' ? '~' : '!'} Confianza ${r.confidence?.toUpperCase()}
+      </span>
+      <span style="font-size:11px;color:var(--muted)">${escHtml(r.data_freshness || '')}</span>
+    </div>
+    <div class="research-grid">
+      <div class="research-card" style="grid-column:1/-1">
+        <h4>Resumen</h4>
+        <p>${escHtml(r.summary || '')}</p>
+      </div>
+      <div class="research-card">
+        <h4>Hechos Clave</h4>
+        <ul class="fact-list">${facts}</ul>
+      </div>
+      <div class="research-card">
+        <h4>Fuentes Citadas</h4>
+        <ul class="source-list">${sources || '<li style="color:var(--muted);font-size:12px">Ninguna citada</li>'}</ul>
+      </div>
+      <div class="research-card">
+        <h4>Tendencias</h4>
+        ${trends || '<p style="color:var(--muted)">—</p>'}
+      </div>
+      <div class="research-card">
+        <h4>Keywords</h4>
+        <div class="keyword-cloud">${keywords}</div>
+      </div>
+    </div>
+    ${r.confidence_explanation ? `<div class="research-card" style="margin-top:12px"><h4>Nota de Confianza</h4><p>${escHtml(r.confidence_explanation)}</p></div>` : ''}
+  `;
+  switchTab('research');
+}
+
+function renderInsights(r) {
+  if (!r || r.parse_error) {
+    document.getElementById('insights-content').innerHTML = `<div class="content-block"><h4>Raw Output</h4><pre>${escHtml(r?.raw || JSON.stringify(r))}</pre></div>`;
+    document.getElementById('empty-insights').style.display = 'none';
+    document.getElementById('insights-content').style.display = 'block';
+    return;
+  }
+  document.getElementById('empty-insights').style.display = 'none';
+  const el = document.getElementById('insights-content');
+  el.style.display = 'block';
+
+  const insights = (r.insights || []).map(i => `
+    <div class="insight-card">
+      <h4>${escHtml(i.insight || i)}</h4>
+      ${i.evidence ? `<div class="evidence">📎 ${escHtml(i.evidence)}</div>` : ''}
+      ${i.implication ? `<div class="implication">→ ${escHtml(i.implication)}</div>` : ''}
+    </div>`).join('');
+
+  const virals = (r.viral_angles || []).map(v => `
+    <div class="viral-card">
+      <h4>${escHtml(v.angle || v)}</h4>
+      ${v.why_viral ? `<div class="why">${escHtml(v.why_viral)}</div>` : ''}
+      ${v.best_formats ? `<div style="margin-top:5px">${(v.best_formats||[]).map(f=>`<span class="keyword">${escHtml(f)}</span>`).join(' ')}</div>` : ''}
+    </div>`).join('');
+
+  const hooks = (r.content_hooks || []).map(h => `
+    <div class="hook-item">
+      ${escHtml(h)}
+      <button class="btn btn-ghost btn-sm copy-hook" onclick="navigator.clipboard.writeText(${JSON.stringify(h)});showToast('Hook copiado','success')">📋</button>
+    </div>`).join('');
+
+  const pos = r.positioning || {};
+  const score = r.opportunity_score || {};
+
+  el.innerHTML = `
+    ${r.executive_summary ? `<div class="research-card" style="margin-bottom:14px"><h4>Executive Summary</h4><p>${escHtml(r.executive_summary)}</p></div>` : ''}
+    <div class="research-grid">
+      <div>
+        <div class="section-title" style="margin-bottom:10px">💡 Insights Accionables</div>
+        ${insights}
+      </div>
+      <div>
+        <div class="section-title" style="margin-bottom:10px">🔥 Ángulos Virales</div>
+        ${virals}
+      </div>
+    </div>
+    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="research-card">
+        <h4>Hooks Listos para Usar</h4>
+        ${hooks}
+      </div>
+      <div class="research-card">
+        <h4>Posicionamiento Sugerido</h4>
+        ${pos.recommended_tone ? `<div class="fact-item">Tono: <strong>${escHtml(pos.recommended_tone)}</strong></div>` : ''}
+        ${pos.main_angle ? `<div class="fact-item">Ángulo: ${escHtml(pos.main_angle)}</div>` : ''}
+        ${pos.cta_direction ? `<div class="fact-item">CTA: ${escHtml(pos.cta_direction)}</div>` : ''}
+        ${score.score ? `<div class="score-bar" style="margin-top:12px"><div class="score-num">${score.score}/10</div><div><div style="font-size:12px;font-weight:600">Oportunidad</div><div class="score-label">${escHtml(score.reasoning||'')}</div></div></div>` : ''}
+      </div>
+    </div>
+  `;
+  switchTab('insights');
+}
+
+function renderDraft(r) {
+  document.getElementById('empty-draft').style.display = 'none';
+  const el = document.getElementById('draft-content');
+  el.style.display = 'block';
+  el.innerHTML = renderFormatsContent(r, 'draft');
+  switchTab('draft');
+}
+
+function renderFinal(r) {
+  document.getElementById('empty-final').style.display = 'none';
+  const el = document.getElementById('final-content');
+  el.style.display = 'block';
+
+  if (!r || r.parse_error) {
+    el.innerHTML = `<div class="content-block"><h4>Raw Output</h4><pre style="font-size:11px">${escHtml(r?.raw || JSON.stringify(r, null, 2))}</pre></div>`;
+    return;
+  }
+
+  const optimized = r.optimized_content || {};
+  const formatsHtml = renderFormatsContent(optimized, 'final');
+
+  const abHooks = (r.ab_variants?.hooks || []).map(h => `
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px">${escHtml(h.format||'')}</div>
+      <div class="ab-pair">
+        <div class="ab-variant"><div class="ab-label">VARIANT A</div><div style="font-size:13px">${escHtml(h.variant_a||'')}</div></div>
+        <div class="ab-variant"><div class="ab-label">VARIANT B</div><div style="font-size:13px">${escHtml(h.variant_b||'')}</div></div>
+      </div>
+      ${h.recommendation ? `<div style="font-size:11px;color:var(--success)">→ ${escHtml(h.recommendation)}</div>` : ''}
+    </div>`).join('');
+
+  const compliance = (r.compliance_notes || []).map(c => `
+    <div class="compliance-item">
+      <div class="ci-issue">⚠ ${escHtml(c.format||'Global')}: ${escHtml(c.issue||c)}</div>
+      ${c.suggestion ? `<div class="ci-fix">→ ${escHtml(c.suggestion)}</div>` : ''}
+    </div>`).join('');
+
+  const improvements = (r.improvements_made || []).map(i => `
+    <div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span style="color:var(--accent)">${escHtml(i.format||'')}</span>: ${escHtml(i.change||i)}
+      ${i.reason ? ` — <span style="color:var(--muted)">${escHtml(i.reason)}</span>` : ''}
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:10px">✅ Contenido Optimizado</div>
+      ${formatsHtml}
+    </div>
+    ${abHooks ? `<div class="research-card" style="margin-bottom:14px"><h4>A/B Variants — Hooks & CTAs</h4>${abHooks}</div>` : ''}
+    ${compliance ? `<div class="research-card" style="margin-bottom:14px"><h4>Notas de Compliance</h4>${compliance}</div>` : ''}
+    ${improvements ? `<div class="research-card" style="margin-bottom:14px"><h4>Mejoras Realizadas</h4>${improvements}</div>` : ''}
+    ${r.editor_notes ? `<div class="research-card"><h4>Notas del Editor</h4><p style="font-size:13px;color:var(--light)">${escHtml(r.editor_notes)}</p></div>` : ''}
+  `;
+  switchTab('final');
+}
+
+function renderFormatsContent(content, prefix) {
+  if (!content || typeof content !== 'object') {
+    return `<div class="content-block"><pre>${escHtml(JSON.stringify(content, null, 2))}</pre></div>`;
+  }
+
+  const formatKeys = ['reel','carousel','linkedin','newsletter','ads'].filter(k => content[k]);
+  if (!formatKeys.length) {
+    return `<div class="content-block"><pre style="font-size:11px">${escHtml(JSON.stringify(content, null, 2))}</pre></div>`;
+  }
+
+  const tabs = formatKeys.map((k, i) => `
+    <div class="format-tab ${i===0?'active':''}" onclick="switchFormat('${prefix}','${k}',this)">${formatLabel(k)}</div>
+  `).join('');
+
+  const panels = formatKeys.map((k, i) => `
+    <div class="format-panel ${i===0?'active':''}" id="${prefix}-panel-${k}">
+      ${renderFormatPanel(k, content[k])}
+    </div>
+  `).join('');
+
+  return `<div class="format-tabs">${tabs}</div>${panels}`;
+}
+
+function switchFormat(prefix, key, el) {
+  el.closest('.format-tabs').querySelectorAll('.format-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  // find sibling panels
+  const container = el.closest('div').parentElement;
+  container.querySelectorAll('.format-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById(`${prefix}-panel-${key}`);
+  if (panel) panel.classList.add('active');
+}
+
+function formatLabel(k) {
+  return { reel:'🎬 Reel', carousel:'📱 Carrusel', linkedin:'💼 LinkedIn', newsletter:'📧 Newsletter', ads:'📢 Ads' }[k] || k;
+}
+
+function renderFormatPanel(format, data) {
+  if (!data || typeof data !== 'object') return `<div class="content-block"><pre>${escHtml(String(data))}</pre></div>`;
+
+  if (format === 'reel') {
+    return `
+      ${block('🎣 Hook', data.hook)}
+      ${block('📝 Script', data.script)}
+      ${block('💬 Texto en Pantalla', data.screen_text)}
+      ${block('📢 CTA', data.cta)}
+      ${block('🎥 B-Roll / Notas Visuales', data.broll_notes)}
+      ${data.hashtags ? `<div class="content-block"><h4>Hashtags</h4><div class="keyword-cloud">${(data.hashtags||[]).map(h=>`<span class="keyword">${escHtml(h)}</span>`).join('')}</div></div>` : ''}
+      ${data.duration_estimate ? `<div style="font-size:12px;color:var(--muted)">Duración estimada: ${escHtml(data.duration_estimate)}</div>` : ''}
+    `;
+  }
+  if (format === 'carousel') {
+    const slides = (data.slides || []).map((s,i) => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:6px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Slide ${s.slide_number||i+1}</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${escHtml(s.title||'')}</div>
+        <div style="font-size:12px;color:var(--light)">${escHtml(s.body||'')}</div>
+        ${s.visual_note ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">🖼 ${escHtml(s.visual_note)}</div>` : ''}
+      </div>`).join('');
+    return `
+      <div class="content-block"><h4>Slides (${data.slides?.length||0})</h4>${slides}</div>
+      ${block('📝 Caption', data.caption)}
+      ${block('📢 CTA', data.cta)}
+      ${data.hashtags ? `<div class="content-block"><h4>Hashtags</h4><div class="keyword-cloud">${(data.hashtags||[]).map(h=>`<span class="keyword">${escHtml(h)}</span>`).join('')}</div></div>` : ''}
+    `;
+  }
+  if (format === 'linkedin') {
+    return `
+      ${block('🎣 Hook (preview)', data.hook)}
+      ${block('📝 Post Completo', data.post)}
+      ${block('📢 CTA', data.cta)}
+      ${data.hashtags ? `<div class="content-block"><h4>Hashtags</h4><div class="keyword-cloud">${(data.hashtags||[]).map(h=>`<span class="keyword">${escHtml(h)}</span>`).join('')}</div></div>` : ''}
+    `;
+  }
+  if (format === 'newsletter') {
+    return `
+      ${block('✉ Asunto', data.subject_line)}
+      ${block('👁 Preview Text', data.preview_text)}
+      ${block('📰 Body', data.body)}
+      ${block('🔘 CTA Button', data.cta_button_text)}
+    `;
+  }
+  if (format === 'ads') {
+    const audiences = [
+      { key: 'cold_audience', label: '❄ Audiencia Fría' },
+      { key: 'warm_audience', label: '🌡 Audiencia Tibia' },
+      { key: 'hot_audience', label: '🔥 Audiencia Caliente' },
+    ];
+    return audiences.filter(a => data[a.key]).map(a => {
+      const d = data[a.key];
+      return `
+        <div class="content-block">
+          <h4>${a.label}</h4>
+          ${d.angle ? `<div style="font-size:11px;color:var(--accent);margin-bottom:8px">Estrategia: ${escHtml(d.angle)}</div>` : ''}
+          <div class="ab-pair">
+            <div class="ab-variant"><div class="ab-label">HOOK A</div><pre>${escHtml(d.hook_1||'')}</pre></div>
+            <div class="ab-variant"><div class="ab-label">HOOK B</div><pre>${escHtml(d.hook_2||'')}</pre></div>
+          </div>
+          <div class="ab-pair">
+            <div class="ab-variant"><div class="ab-label">COPY A</div><pre>${escHtml(d.primary_text_1||'')}</pre></div>
+            <div class="ab-variant"><div class="ab-label">COPY B</div><pre>${escHtml(d.primary_text_2||'')}</pre></div>
+          </div>
+          <div class="ab-pair">
+            <div class="ab-variant"><div class="ab-label">HEADLINE A</div><pre>${escHtml(d.headline_1||'')}</pre></div>
+            <div class="ab-variant"><div class="ab-label">HEADLINE B</div><pre>${escHtml(d.headline_2||'')}</pre></div>
+          </div>
+          ${d.cta ? `<div style="margin-top:6px;font-size:12px;color:var(--success)">CTA: ${escHtml(d.cta)}</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+  // Fallback: JSON dump
+  return `<div class="content-block"><pre style="font-size:11px">${escHtml(JSON.stringify(data, null, 2))}</pre></div>`;
+}
+
+function block(title, text) {
+  if (!text) return '';
+  return `<div class="content-block">
+    <h4>${escHtml(title)}</h4>
+    <pre>${escHtml(String(text))}</pre>
+  </div>`;
+}
+
+// ─── Export & Copy ─────────────────────────────────────────────────────────
+async function copyOutput() {
+  if (!currentRunId) return;
+  const res = await fetch(`/api/runs/${currentRunId}/export/markdown`);
+  const text = await res.text();
+  await navigator.clipboard.writeText(text);
+  showToast('Output copiado al clipboard ✓', 'success');
+}
+
+async function exportJSON() {
+  if (!currentRunId) return;
+  const res = await fetch(`/api/runs/${currentRunId}/export/json`);
+  const data = await res.json();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `run-${currentRunId.slice(0,8)}.json`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('JSON exportado', 'success');
+}
+
+async function exportMarkdown() {
+  if (!currentRunId) return;
+  const res = await fetch(`/api/runs/${currentRunId}/export/markdown`);
+  const text = await res.text();
+  const blob = new Blob([text], {type:'text/markdown'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `run-${currentRunId.slice(0,8)}.md`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Markdown exportado', 'success');
+}
+
+// ─── Reset ─────────────────────────────────────────────────────────────────
+function resetAll() {
+  currentRunId = null;
+  agentResults = { scout: null, analyst: null, writer: null, optimizer: null };
+  logs = [];
+  isPipelineRunning = false;
+  isAgentRunning = false;
+
+  ['scout','analyst','writer','optimizer'].forEach(a => {
+    setAgentStatus(a, 'idle');
+    const prev = document.getElementById(`preview-${a}`);
+    if (prev) { prev.textContent = a === 'scout' ? 'Investigación pendiente...' : `Requiere ${['scout','analyst','writer'][['analyst','writer','optimizer'].indexOf(a)]} completado.`; prev.className = 'agent-preview'; }
+  });
+
+  document.getElementById('run-label').textContent = 'Sin run activo';
+  document.getElementById('logs-content').innerHTML = '';
+  document.getElementById('empty-logs').style.display = '';
+
+  ['research','insights','draft','final'].forEach(t => {
+    document.getElementById(`empty-${t}`).style.display = '';
+    document.getElementById(`${t}-content`).style.display = 'none';
+    document.getElementById(`${t}-content`).innerHTML = '';
+  });
+
+  document.getElementById('btn-copy').disabled = true;
+  document.getElementById('btn-export-json').disabled = true;
+  document.getElementById('btn-export-md').disabled = true;
+  document.getElementById('url-validation-result').innerHTML = '';
+
+  setBusy(false);
+  switchTab('research');
+  showToast('Reset completo', 'success');
+}
+
+// ─── History modal (simple) ─────────────────────────────────────────────────
+async function openHistory() {
+  const res = await fetch('/api/runs');
+  const data = await res.json();
+  const runs = data.runs || [];
+  if (!runs.length) { showToast('Sin runs guardados', 'warn'); return; }
+
+  const list = runs.map(r => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;hover:background:var(--card)"
+         onclick="loadRun('${r.id}')">
+      <div>
+        <div style="font-size:13px;font-weight:500">${escHtml(r.topic||'Sin tópico')}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.created_at?.slice(0,16).replace('T',' ')} — ${r.status}</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${r.id.slice(0,8)}</div>
+    </div>`).join('');
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;width:500px;max-height:70vh;overflow:hidden;display:flex;flex-direction:column">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:600">Historial de Runs</span>
+        <button class="btn btn-ghost btn-sm" onclick="this.closest('div[style]').remove()">✕</button>
+      </div>
+      <div style="overflow-y:auto">${list}</div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function loadRun(runId) {
+  const res = await fetch(`/api/runs/${runId}`);
+  const run = await res.json();
+  currentRunId = runId;
+  document.getElementById('run-label').textContent = `Run: ${runId.slice(0,8)}`;
+  document.querySelector('div[style*="position:fixed"]')?.remove();
+
+  // Restore results
+  Object.entries(run.results || {}).forEach(([agent, result]) => {
+    if (result.status && result.status !== 'idle') {
+      setAgentStatus(agent, result.status);
+      if (result.content) {
+        agentResults[agent] = result.content;
+        renderResult(agent, result.content);
+      }
+    }
+  });
+
+  // Restore logs
+  logs = [];
+  document.getElementById('logs-content').innerHTML = '';
+  (run.logs || []).forEach(l => addLog(l.level, l.message));
+
+  enableExports();
+  showToast(`Run ${runId.slice(0,8)} cargado`, 'success');
+}
+
+// ─── Utils ─────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer = null;
+function showToast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+</script>
+</body>
+</html>
