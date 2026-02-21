@@ -109,20 +109,25 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                     if response.status_code == 429:
                         body = await response.aread()
                         try:
-                            err_msg = json.loads(body).get("error", {}).get("message", "").lower()
+                            err_json = json.loads(body)
+                            err_msg = err_json.get("error", {}).get("message", "")
                         except Exception:
-                            err_msg = ""
-                        is_billing = any(k in err_msg for k in ("billing", "exceeded your current quota", "quota_exceeded"))
-                        if is_billing:
-                            yield ("error", (
-                                "Cuota de API agotada. Activa la facturación en Google Cloud Console "
-                                "o revisa tu plan en aistudio.google.com."
-                            ))
+                            err_json = {}
+                            err_msg = body.decode(errors="replace") if isinstance(body, bytes) else str(body)
+                        print(f"[Gemini 429] intento={attempt} mensaje={err_msg!r}", flush=True)
+                        err_lower = err_msg.lower()
+                        is_quota = any(k in err_lower for k in (
+                            "billing", "exceeded your current quota",
+                            "quota_exceeded", "resource_exhausted",
+                            "per day", "daily",
+                        ))
+                        if is_quota and attempt == 0:
+                            yield ("error", f"Cuota agotada: {err_msg}. Revisa tu plan en aistudio.google.com.")
                             return
                         if attempt < 3:
                             await asyncio.sleep(15)
                             continue
-                        yield ("error", "Rate limit alcanzado tras 3 intentos. Espera un momento y vuelve a intentarlo.")
+                        yield ("error", f"Rate limit tras 3 intentos: {err_msg}")
                         return
                     if response.status_code != 200:
                         yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
@@ -470,6 +475,7 @@ async def stream_pipeline(run_id: str):
                     return
 
         # ── 2. ANALYST ──────────────────────────────────────────────────────
+        await asyncio.sleep(5)
         if agents_enabled.get("analyst", True):
             scout_content = results.get("scout") or get_run(run_id)["results"]["scout"].get("content")
             if not scout_content:
@@ -500,6 +506,7 @@ async def stream_pipeline(run_id: str):
                     return
 
         # ── 3. WRITER ───────────────────────────────────────────────────────
+        await asyncio.sleep(5)
         if agents_enabled.get("writer", True):
             scout_content = results.get("scout") or get_run(run_id)["results"]["scout"].get("content")
             analyst_content = results.get("analyst") or get_run(run_id)["results"]["analyst"].get("content")
@@ -531,6 +538,7 @@ async def stream_pipeline(run_id: str):
                     return
 
         # ── 4. OPTIMIZER ────────────────────────────────────────────────────
+        await asyncio.sleep(5)
         if agents_enabled.get("optimizer", True):
             writer_content = results.get("writer") or get_run(run_id)["results"]["writer"].get("content")
             if not writer_content:
