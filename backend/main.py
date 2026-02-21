@@ -129,7 +129,7 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             "quota_exceeded", "resource_exhausted",
                             "per day", "daily",
                         ))
-                        if is_quota and attempt == 0:
+                        if is_quota and not retry_match:
                             yield ("error", f"Cuota agotada: {err_msg}. Revisa tu plan en aistudio.google.com.")
                             return
                         if attempt < 3:
