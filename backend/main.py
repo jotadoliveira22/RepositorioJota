@@ -93,7 +93,7 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
     payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
-        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.7},
+        "generationConfig": {"maxOutputTokens": 5000, "temperature": 0.7},
     }
 
     for attempt in range(4):
@@ -499,7 +499,7 @@ async def stream_pipeline(run_id: str):
                     return
 
         # ── 2. ANALYST ──────────────────────────────────────────────────────
-        await asyncio.sleep(5)
+        await asyncio.sleep(15)
         if agents_enabled.get("analyst", True):
             scout_content = results.get("scout") or get_run(run_id)["results"]["scout"].get("content")
             if not scout_content:
@@ -533,7 +533,7 @@ async def stream_pipeline(run_id: str):
                     return
 
         # ── 3. WRITER ───────────────────────────────────────────────────────
-        await asyncio.sleep(5)
+        await asyncio.sleep(15)
         if agents_enabled.get("writer", True):
             scout_content = results.get("scout") or get_run(run_id)["results"]["scout"].get("content")
             analyst_content = results.get("analyst") or get_run(run_id)["results"]["analyst"].get("content")
@@ -568,7 +568,7 @@ async def stream_pipeline(run_id: str):
                     return
 
         # ── 4. OPTIMIZER ────────────────────────────────────────────────────
-        await asyncio.sleep(5)
+        await asyncio.sleep(15)
         if agents_enabled.get("optimizer", True):
             writer_content = results.get("writer") or get_run(run_id)["results"]["writer"].get("content")
             if not writer_content:
