@@ -4,6 +4,7 @@ Orchestrates the Scout → Analyst → Writing → Optimizer pipeline.
 """
 import json
 import os
+import re
 import asyncio
 from typing import AsyncIterator
 
@@ -115,17 +116,26 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             err_json = {}
                             err_msg = body.decode(errors="replace") if isinstance(body, bytes) else str(body)
                         print(f"[Gemini 429] intento={attempt} mensaje={err_msg!r}", flush=True)
+
+                        # Parse suggested retry time from the error message (e.g. "retry in 40.7s")
+                        retry_match = re.search(r'retry in ([\d.]+)s', err_msg, re.IGNORECASE)
+                        suggested_wait = float(retry_match.group(1)) if retry_match else None
+
                         err_lower = err_msg.lower()
                         is_quota = any(k in err_lower for k in (
                             "billing", "exceeded your current quota",
                             "quota_exceeded", "resource_exhausted",
                             "per day", "daily",
                         ))
-                        if is_quota and attempt == 0:
+                        # If the API gives a short retry window (<= 2 min) it's a rate limit, not hard quota
+                        is_retryable_rate_limit = suggested_wait is not None and suggested_wait <= 120
+                        if is_quota and not is_retryable_rate_limit and attempt == 0:
                             yield ("error", f"Cuota agotada: {err_msg}. Revisa tu plan en aistudio.google.com.")
                             return
                         if attempt < 3:
-                            await asyncio.sleep(15)
+                            wait_time = suggested_wait if is_retryable_rate_limit else 15
+                            print(f"[Gemini 429] esperando {wait_time:.1f}s antes de reintentar...", flush=True)
+                            await asyncio.sleep(wait_time)
                             continue
                         yield ("error", f"Rate limit tras 3 intentos: {err_msg}")
                         return
