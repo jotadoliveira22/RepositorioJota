@@ -133,6 +133,7 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             yield ("error", f"Cuota agotada: {err_msg}. Revisa tu plan en aistudio.google.com.")
                             return
                         if attempt < 3:
+                            yield ("retry", str(int(retry_wait)))
                             await asyncio.sleep(retry_wait)
                             continue
                         yield ("error", f"Rate limit tras {attempt} intentos: {err_msg}")
@@ -312,6 +313,9 @@ async def stream_scout(run_id: str):
                 update_agent_result(run_id, "scout", "done", content=result)
                 append_log(run_id, f"Scout Agent completado. Confianza: {result.get('confidence', '?')}")
                 yield sse_event({"type": "done", "agent": "scout", "result": result})
+            elif event_type == "retry":
+                append_log(run_id, f"Scout: rate limit, reintentando en {data}s")
+                yield sse_event({"type": "rate_limit", "agent": "scout", "wait": int(data)})
             elif event_type == "error":
                 update_agent_result(run_id, "scout", "error", error=data)
                 append_log(run_id, f"Scout Agent error: {data}", level="error")
@@ -350,6 +354,9 @@ async def stream_analyst(run_id: str):
                 update_agent_result(run_id, "analyst", "done", content=result)
                 append_log(run_id, "Analyst Agent completado")
                 yield sse_event({"type": "done", "agent": "analyst", "result": result})
+            elif event_type == "retry":
+                append_log(run_id, f"Analyst: rate limit, reintentando en {data}s")
+                yield sse_event({"type": "rate_limit", "agent": "analyst", "wait": int(data)})
             elif event_type == "error":
                 update_agent_result(run_id, "analyst", "error", error=data)
                 append_log(run_id, f"Analyst Agent error: {data}", level="error")
@@ -389,6 +396,9 @@ async def stream_writer(run_id: str):
                 update_agent_result(run_id, "writer", "done", content=result)
                 append_log(run_id, "Writing Agent completado")
                 yield sse_event({"type": "done", "agent": "writer", "result": result})
+            elif event_type == "retry":
+                append_log(run_id, f"Writer: rate limit, reintentando en {data}s")
+                yield sse_event({"type": "rate_limit", "agent": "writer", "wait": int(data)})
             elif event_type == "error":
                 update_agent_result(run_id, "writer", "error", error=data)
                 append_log(run_id, f"Writing Agent error: {data}", level="error")
@@ -427,6 +437,9 @@ async def stream_optimizer(run_id: str):
                 update_agent_result(run_id, "optimizer", "done", content=result)
                 append_log(run_id, "Optimizer Agent completado")
                 yield sse_event({"type": "done", "agent": "optimizer", "result": result})
+            elif event_type == "retry":
+                append_log(run_id, f"Optimizer: rate limit, reintentando en {data}s")
+                yield sse_event({"type": "rate_limit", "agent": "optimizer", "wait": int(data)})
             elif event_type == "error":
                 update_agent_result(run_id, "optimizer", "error", error=data)
                 append_log(run_id, f"Optimizer Agent error: {data}", level="error")
@@ -475,6 +488,9 @@ async def stream_pipeline(run_id: str):
                     update_agent_result(run_id, "scout", "done", content=results["scout"])
                     append_log(run_id, "Pipeline: Scout completado")
                     yield sse_event({"type": "done", "agent": "scout", "result": results["scout"]})
+                elif event_type == "retry":
+                    append_log(run_id, f"Pipeline Scout: rate limit, reintentando en {data}s")
+                    yield sse_event({"type": "rate_limit", "agent": "scout", "wait": int(data)})
                 elif event_type == "error":
                     update_agent_result(run_id, "scout", "error", error=data)
                     append_log(run_id, f"Pipeline: Scout error — {data}", level="error")
@@ -506,6 +522,9 @@ async def stream_pipeline(run_id: str):
                     update_agent_result(run_id, "analyst", "done", content=results["analyst"])
                     append_log(run_id, "Pipeline: Analyst completado")
                     yield sse_event({"type": "done", "agent": "analyst", "result": results["analyst"]})
+                elif event_type == "retry":
+                    append_log(run_id, f"Pipeline Analyst: rate limit, reintentando en {data}s")
+                    yield sse_event({"type": "rate_limit", "agent": "analyst", "wait": int(data)})
                 elif event_type == "error":
                     update_agent_result(run_id, "analyst", "error", error=data)
                     append_log(run_id, f"Pipeline: Analyst error — {data}", level="error")
@@ -538,6 +557,9 @@ async def stream_pipeline(run_id: str):
                     update_agent_result(run_id, "writer", "done", content=results["writer"])
                     append_log(run_id, "Pipeline: Writer completado")
                     yield sse_event({"type": "done", "agent": "writer", "result": results["writer"]})
+                elif event_type == "retry":
+                    append_log(run_id, f"Pipeline Writer: rate limit, reintentando en {data}s")
+                    yield sse_event({"type": "rate_limit", "agent": "writer", "wait": int(data)})
                 elif event_type == "error":
                     update_agent_result(run_id, "writer", "error", error=data)
                     append_log(run_id, f"Pipeline: Writer error — {data}", level="error")
@@ -569,6 +591,9 @@ async def stream_pipeline(run_id: str):
                     update_agent_result(run_id, "optimizer", "done", content=result)
                     append_log(run_id, "Pipeline: Optimizer completado")
                     yield sse_event({"type": "done", "agent": "optimizer", "result": result})
+                elif event_type == "retry":
+                    append_log(run_id, f"Pipeline Optimizer: rate limit, reintentando en {data}s")
+                    yield sse_event({"type": "rate_limit", "agent": "optimizer", "wait": int(data)})
                 elif event_type == "error":
                     update_agent_result(run_id, "optimizer", "error", error=data)
                     append_log(run_id, f"Pipeline: Optimizer error — {data}", level="error")

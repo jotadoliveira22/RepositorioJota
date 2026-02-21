@@ -645,6 +645,11 @@ async function streamAgent(runId, agentName) {
         addLog('info', `${agentName} completado`);
         resolve(data.result);
       }
+      else if (data.type === 'rate_limit') {
+        addLog('warn', `${agentName}: rate limit — reintentando en ${data.wait}s...`);
+        updateAgentPreview(agentName, `⏳ Rate limit detectado. Reintentando en ${data.wait}s...`);
+        showToast(`Rate limit en ${agentName}. Reintentando en ${data.wait}s...`, 'info');
+      }
       else if (data.type === 'error') {
         es.close();
         setAgentStatus(agentName, 'error');
@@ -694,6 +699,11 @@ async function runPipeline() {
         setAgentStatus(data.agent, 'done');
         renderResult(data.agent, data.result);
         addLog('info', `${data.agent} completado`);
+      }
+      else if (data.type === 'rate_limit') {
+        addLog('warn', `${data.agent}: rate limit — reintentando en ${data.wait}s...`);
+        updateAgentPreview(data.agent, `⏳ Rate limit detectado. Reintentando en ${data.wait}s...`);
+        showToast(`Rate limit en ${data.agent}. Reintentando en ${data.wait}s...`, 'info');
       }
       else if (data.type === 'error') {
         setAgentStatus(data.agent, 'error');
