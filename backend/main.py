@@ -4,6 +4,7 @@ Orchestrates the Scout → Analyst → Writing → Optimizer pipeline.
 """
 import json
 import os
+import re
 import asyncio
 from typing import AsyncIterator
 
@@ -114,7 +115,14 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                         except Exception:
                             err_json = {}
                             err_msg = body.decode(errors="replace") if isinstance(body, bytes) else str(body)
-                        print(f"[Gemini 429] intento={attempt} mensaje={err_msg!r}", flush=True)
+
+                        # Parse retry time from error message, e.g. "Please retry in 40.7s"
+                        retry_wait = 60  # conservative default
+                        retry_match = re.search(r"retry in (\d+\.?\d*)s", err_msg, re.IGNORECASE)
+                        if retry_match:
+                            retry_wait = min(float(retry_match.group(1)) + 5, 120)
+
+                        print(f"[Gemini 429] intento={attempt} wait={retry_wait:.0f}s mensaje={err_msg!r}", flush=True)
                         err_lower = err_msg.lower()
                         is_quota = any(k in err_lower for k in (
                             "billing", "exceeded your current quota",
@@ -125,9 +133,9 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             yield ("error", f"Cuota agotada: {err_msg}. Revisa tu plan en aistudio.google.com.")
                             return
                         if attempt < 3:
-                            await asyncio.sleep(15)
+                            await asyncio.sleep(retry_wait)
                             continue
-                        yield ("error", f"Rate limit tras 3 intentos: {err_msg}")
+                        yield ("error", f"Rate limit tras {attempt} intentos: {err_msg}")
                         return
                     if response.status_code != 200:
                         yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
