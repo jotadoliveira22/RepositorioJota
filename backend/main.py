@@ -110,9 +110,22 @@ async def _probe_models(api_key: str) -> str | None:
                 if resp.status_code == 200:
                     _working_model = model
                     return model
-                if resp.status_code in (401, 403):
-                    # Key is invalid — no point trying other models
+                if resp.status_code == 401:
+                    # Key is definitively invalid
+                    print("[Gemini probe] 401 — API key invalid, aborting probe", flush=True)
                     return None
+                if resp.status_code == 400:
+                    # Google returns 400 for invalid API keys
+                    try:
+                        err_text = resp.text.lower()
+                        if "api key not valid" in err_text or "api_key_invalid" in err_text:
+                            print("[Gemini probe] 400 — API key not valid, aborting probe", flush=True)
+                            return None
+                    except Exception:
+                        pass
+                # 403 = model-specific restriction (not a bad key), 404 = model not found,
+                # 429 = rate limited — continue trying the next model
+                print(f"[Gemini probe] {model} → {resp.status_code}, trying next model", flush=True)
             except Exception as exc:
                 print(f"[Gemini probe] {model} → exception: {exc}", flush=True)
     return None
