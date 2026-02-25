@@ -71,7 +71,7 @@ class ValidateUrlsRequest(BaseModel):
 
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash-001:streamGenerateContent?alt=sse&key={key}"
+    "gemini-1.5-flash:streamGenerateContent?alt=sse&key={key}"
 )
 
 
