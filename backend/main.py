@@ -69,10 +69,51 @@ class ValidateUrlsRequest(BaseModel):
 # Helper: Claude streaming call
 # ---------------------------------------------------------------------------
 
-GEMINI_URL = (
+# Models tried in order until one responds with HTTP 200
+GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro",
+]
+
+GEMINI_URL_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-1.5-flash:streamGenerateContent?alt=sse&key={key}"
+    "{model}:streamGenerateContent?alt=sse&key={key}"
 )
+
+# Cache the first working model so we don't probe on every request
+_working_model: str | None = None
+
+
+async def _probe_models(api_key: str) -> str | None:
+    """Return the first Gemini model that answers generateContent with HTTP 200."""
+    global _working_model
+    if _working_model:
+        return _working_model
+    probe_payload = {
+        "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+        "generationConfig": {"maxOutputTokens": 1},
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        for model in GEMINI_MODELS:
+            url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent?key={api_key}"
+            )
+            try:
+                resp = await client.post(url, json=probe_payload)
+                print(f"[Gemini probe] {model} → {resp.status_code}", flush=True)
+                if resp.status_code == 200:
+                    _working_model = model
+                    return model
+                if resp.status_code in (401, 403):
+                    # Key is invalid — no point trying other models
+                    return None
+            except Exception as exc:
+                print(f"[Gemini probe] {model} → exception: {exc}", flush=True)
+    return None
 
 
 async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[str, str]]:
@@ -81,15 +122,24 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
       - ("text", "...") for streaming text chunks
       - ("done", json_string) when finished
       - ("error", message) on error
-    Uses Google Gemini REST API via httpx.
-    Retries up to 3 times on rate limit (429) with 15s backoff.
+    Auto-detects the best available Gemini model and retries on rate limit (429).
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         yield ("error", "GEMINI_API_KEY not set in environment")
         return
 
-    url = GEMINI_URL.format(key=api_key)
+    model = await _probe_models(api_key)
+    if not model:
+        yield ("error", (
+            "No se encontró ningún modelo Gemini disponible para esta API key. "
+            "Verifica que la clave sea válida en aistudio.google.com y que tenga "
+            "acceso a la API de Gemini."
+        ))
+        return
+
+    print(f"[Gemini] Usando modelo: {model}", flush=True)
+    url = GEMINI_URL_TEMPLATE.format(model=model, key=api_key)
     payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
@@ -102,9 +152,13 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
             async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", url, json=payload) as response:
                     if response.status_code == 400:
+                        body = await response.aread()
+                        print(f"[Gemini 400] {body[:300]}", flush=True)
                         yield ("error", "Solicitud inválida a la API de Gemini.")
                         return
                     if response.status_code in (401, 403):
+                        body = await response.aread()
+                        print(f"[Gemini {response.status_code}] {body[:300]}", flush=True)
                         yield ("error", "API key inválida. Revisa GEMINI_API_KEY.")
                         return
                     if response.status_code == 429:
@@ -117,7 +171,6 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             err_msg = body.decode(errors="replace") if isinstance(body, bytes) else str(body)
                         print(f"[Gemini 429] intento={attempt} mensaje={err_msg!r}", flush=True)
 
-                        # Parse suggested retry time from the error message (e.g. "retry in 40.7s")
                         retry_match = re.search(r'retry in ([\d.]+)s', err_msg, re.IGNORECASE)
                         suggested_wait = float(retry_match.group(1)) if retry_match else None
 
@@ -127,7 +180,6 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             "quota_exceeded", "resource_exhausted",
                             "per day", "daily",
                         ))
-                        # If the API gives a short retry window (<= 2 min) it's a rate limit, not hard quota
                         is_retryable_rate_limit = suggested_wait is not None and suggested_wait <= 120
                         if is_quota and not is_retryable_rate_limit and attempt == 0:
                             yield ("error", f"Cuota agotada: {err_msg}. Revisa tu plan en aistudio.google.com.")
@@ -140,6 +192,8 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                         yield ("error", f"Rate limit tras 3 intentos: {err_msg}")
                         return
                     if response.status_code != 200:
+                        body = await response.aread()
+                        print(f"[Gemini {response.status_code}] {body[:300]}", flush=True)
                         yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
                         return
 
