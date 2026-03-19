@@ -12,7 +12,7 @@ class WatchlistConfig:
         "XBT/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD"
     ])
     xstocks: List[str] = field(default_factory=lambda: [
-        "AAPLx", "TSLAx", "MSFTx", "NVDAx", "SPYx"
+        "AAPLx/USD", "TSLAx/USD", "MSFTx/USD", "NVDAx/USD", "SPYx/USD"
     ])
     spot_fx: List[str] = field(default_factory=lambda: [
         "EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD"

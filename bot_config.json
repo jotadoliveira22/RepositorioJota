@@ -6,7 +6,7 @@
   "log_level": "INFO",
   "watchlist": {
     "crypto_spot": ["XBT/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD"],
-    "xstocks": ["AAPLx", "TSLAx", "MSFTx", "NVDAx", "SPYx"],
+    "xstocks": ["AAPLx/USD", "TSLAx/USD", "MSFTx/USD", "NVDAx/USD", "SPYx/USD"],
     "spot_fx": ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD"],
     "futures": ["PF_XBTUSD", "PF_ETHUSD", "PF_SOLUSD"]
   },
