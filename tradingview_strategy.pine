@@ -1,0 +1,426 @@
+// This Pine Script(TM) v6 indicator/strategy replicates the Kraken Bot strategy.
+// S/R Bounce + Trendline Bounce with EMA confirmation, ATR filter,
+// fixed 5% SL, trailing stop, and time stop.
+// Timeframe: 1H recommended.
+
+//@version=6
+strategy("Kraken Bot — S/R + Trendline + EMA", overlay=true,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=5,
+     initial_capital=100, commission_type=strategy.commission.percent,
+     commission_value=0.1, slippage=1, pyramiding=0,
+     calc_on_every_tick=false)
+
+// ─── INPUTS ────────────────────────────────────────────────────────────────────
+
+// Strategy
+i_pivotLeft      = input.int(3,    "Pivot Left Window",       minval=1, group="Strategy")
+i_pivotRight     = input.int(3,    "Pivot Right Window",      minval=1, group="Strategy")
+i_srTolPct       = input.float(0.5,"S/R Tolerance %",         step=0.1, group="Strategy")
+i_srMinTouches   = input.int(4,    "S/R Min Touches",         minval=2, group="Strategy")
+i_entryProxPct   = input.float(0.3,"Entry Proximity %",       step=0.1, group="Strategy")
+i_minRR          = input.float(1.5,"Min Risk:Reward Ratio",   step=0.1, group="Strategy")
+
+// EMAs
+i_emaFast        = input.int(20,   "EMA Fast",                minval=2, group="EMA")
+i_emaSlow        = input.int(50,   "EMA Slow",                minval=2, group="EMA")
+i_useMacro       = input.bool(false,"Use EMA Macro Filter",          group="EMA")
+i_emaMacro       = input.int(200,  "EMA Macro",               minval=2, group="EMA")
+
+// Risk
+i_slPct          = input.float(5.0,"Stop Loss %",             step=0.5, group="Risk")
+i_trailEnabled   = input.bool(true,"Trailing Stop Enabled",          group="Risk")
+i_trailActR      = input.float(1.0,"Trailing Activation (R)", step=0.1, group="Risk")
+i_trailPct       = input.float(2.0,"Trailing Stop %",         step=0.1, group="Risk")
+i_timeStopBars   = input.int(18,   "Time Stop (bars)",        minval=1, group="Risk")
+
+// ATR Filter
+i_atrPeriod      = input.int(14,   "ATR Period",              minval=1, group="Execution")
+i_atrThreshold   = input.float(0.8,"ATR Exhaustion Threshold",step=0.05,group="Execution")
+i_atrDailyBars   = input.int(336,  "ATR Daily Avg Lookback (bars)", minval=24, group="Execution",
+                   tooltip="14 days x 24 bars = 336 for 1H chart")
+
+// Visual
+i_showLevels     = input.bool(true, "Show S/R Levels",                group="Display")
+i_showEma        = input.bool(true, "Show EMAs",                      group="Display")
+i_showTrendlines = input.bool(true, "Show Trendlines",                group="Display")
+
+// ─── EMA CALCULATION ───────────────────────────────────────────────────────────
+
+emaFast  = ta.ema(close, i_emaFast)
+emaSlow  = ta.ema(close, i_emaSlow)
+emaMacro = ta.ema(close, i_emaMacro)
+
+emaBullish = emaFast > emaSlow
+emaBearish = emaFast < emaSlow
+
+// Macro filter override
+if i_useMacro and not na(emaMacro)
+    if emaBullish and close < emaMacro
+        emaBullish := false
+    if emaBearish and close > emaMacro
+        emaBearish := false
+
+// Plot EMAs
+plot(i_showEma ? emaFast  : na, "EMA Fast",  color.new(color.blue, 0),   linewidth=1)
+plot(i_showEma ? emaSlow  : na, "EMA Slow",  color.new(color.orange, 0), linewidth=1)
+plot(i_showEma and i_useMacro ? emaMacro : na, "EMA Macro", color.new(color.gray, 30), linewidth=2)
+
+// ─── ATR ───────────────────────────────────────────────────────────────────────
+
+atrValue = ta.atr(i_atrPeriod)
+
+// ATR daily average (max of each 24-bar chunk over lookback)
+atrDailyAvg(atrSeries, lookbackBars) =>
+    sum = 0.0
+    chunks = 0
+    for d = 0 to (lookbackBars / 24) - 1
+        chunkMax = 0.0
+        for h = 0 to 23
+            idx = d * 24 + h
+            if idx < lookbackBars
+                val = nz(atrSeries[idx])
+                chunkMax := math.max(chunkMax, val)
+        if chunkMax > 0
+            sum += chunkMax
+            chunks += 1
+    chunks > 0 ? sum / chunks : atrSeries
+
+atrAvg = atrDailyAvg(atrValue, i_atrDailyBars)
+atrExhausted = atrAvg > 0 ? (atrValue / atrAvg) >= i_atrThreshold : false
+
+// ─── PIVOT DETECTION ───────────────────────────────────────────────────────────
+
+swingHigh = ta.pivothigh(high, i_pivotLeft, i_pivotRight)
+swingLow  = ta.pivotlow(low,   i_pivotLeft, i_pivotRight)
+
+// ─── S/R LEVEL TRACKING ────────────────────────────────────────────────────────
+// We maintain arrays of S/R levels built from pivot history.
+
+var float[] srPrices   = array.new_float()
+var int[]   srTouches  = array.new_int()
+var string[] srTypes   = array.new_string()
+var int     maxLevels  = 50
+
+// Helper: find if a price matches an existing level within tolerance
+findLevel(price) =>
+    idx = -1
+    for i = 0 to array.size(srPrices) - 1
+        lvl = array.get(srPrices, i)
+        tol = lvl * i_srTolPct / 100
+        if math.abs(price - lvl) <= tol
+            idx := i
+            break
+    idx
+
+// Add or update S/R level
+addOrUpdateLevel(price, levelType) =>
+    idx = findLevel(price)
+    if idx >= 0
+        // Update: weighted average price, increment touches
+        oldPrice = array.get(srPrices, idx)
+        oldTouches = array.get(srTouches, idx)
+        newPrice = (oldPrice * oldTouches + price) / (oldTouches + 1)
+        array.set(srPrices, idx, newPrice)
+        array.set(srTouches, idx, oldTouches + 1)
+    else
+        // New level
+        if array.size(srPrices) >= maxLevels
+            // Remove oldest (first)
+            array.shift(srPrices)
+            array.shift(srTouches)
+            array.shift(srTypes)
+        array.push(srPrices, price)
+        array.push(srTouches, 1)
+        array.push(srTypes, levelType)
+
+// Register pivots (delayed by pivotRight bars)
+if not na(swingHigh)
+    addOrUpdateLevel(swingHigh, "resistance")
+if not na(swingLow)
+    addOrUpdateLevel(swingLow, "support")
+
+// Invalidate broken levels
+invalidateLevel(idx) =>
+    array.remove(srPrices, idx)
+    array.remove(srTouches, idx)
+    array.remove(srTypes, idx)
+
+// Remove invalidated levels (price closed significantly beyond)
+if array.size(srPrices) > 0
+    for i = array.size(srPrices) - 1 to 0
+        lvl    = array.get(srPrices, i)
+        lType  = array.get(srTypes, i)
+        breakTol = lvl * i_srTolPct * 2 / 100
+        if lType == "support" and close < lvl - breakTol
+            invalidateLevel(i)
+        else if lType == "resistance" and close > lvl + breakTol
+            invalidateLevel(i)
+
+// ─── FIND NEAREST S/R FOR TP ───────────────────────────────────────────────────
+
+findNextResistance() =>
+    best = 0.0
+    found = false
+    for i = 0 to array.size(srPrices) - 1
+        if array.get(srTypes, i) == "resistance" and array.get(srTouches, i) >= i_srMinTouches
+            p = array.get(srPrices, i)
+            if p > close * 1.001
+                if not found or p < best
+                    best := p
+                    found := true
+    found ? best : na
+
+findNextSupport() =>
+    best = 0.0
+    found = false
+    for i = 0 to array.size(srPrices) - 1
+        if array.get(srTypes, i) == "support" and array.get(srTouches, i) >= i_srMinTouches
+            p = array.get(srPrices, i)
+            if p < close * 0.999
+                if not found or p > best
+                    best := p
+                    found := true
+    found ? best : na
+
+// ─── TRENDLINE TRACKING ────────────────────────────────────────────────────────
+// Track recent swing lows for ascending, swing highs for descending trendlines.
+
+var int[]   tlAscIdx    = array.new_int()
+var float[] tlAscPrice  = array.new_float()
+var int[]   tlDescIdx   = array.new_int()
+var float[] tlDescPrice = array.new_float()
+var int     maxTlPoints = 30
+
+if not na(swingLow)
+    if array.size(tlAscIdx) >= maxTlPoints
+        array.shift(tlAscIdx)
+        array.shift(tlAscPrice)
+    array.push(tlAscIdx, bar_index - i_pivotRight)
+    array.push(tlAscPrice, swingLow)
+
+if not na(swingHigh)
+    if array.size(tlDescIdx) >= maxTlPoints
+        array.shift(tlDescIdx)
+        array.shift(tlDescPrice)
+    array.push(tlDescIdx, bar_index - i_pivotRight)
+    array.push(tlDescPrice, swingHigh)
+
+// Fit best trendline from points: returns [slope, intercept, touches]
+fitTrendline(indices, prices, dir) =>
+    n = array.size(indices)
+    bestSlope     = 0.0
+    bestIntercept = 0.0
+    bestTouches   = 0
+    if n >= i_srMinTouches  // reusing min touches for trendlines
+        for i = 0 to n - 2
+            for j = i + 1 to n - 1
+                idxA = array.get(indices, i)
+                idxB = array.get(indices, j)
+                pA   = array.get(prices, i)
+                pB   = array.get(prices, j)
+                if idxB != idxA
+                    slope = (pB - pA) / (idxB - idxA)
+                    validDir = (dir == "ascending" and slope > 0) or (dir == "descending" and slope < 0)
+                    if validDir
+                        intercept = pA - slope * idxA
+                        touches = 0
+                        for k = 0 to n - 1
+                            idxK = array.get(indices, k)
+                            pK   = array.get(prices, k)
+                            expected = slope * idxK + intercept
+                            if expected != 0
+                                dev = math.abs(pK - expected) / expected * 100
+                                if dev <= 0.3  // trendline_max_deviation_pct
+                                    touches += 1
+                        if touches >= i_srMinTouches and touches > bestTouches
+                            bestSlope     := slope
+                            bestIntercept := intercept
+                            bestTouches   := touches
+    [bestSlope, bestIntercept, bestTouches]
+
+[ascSlope, ascIntercept, ascTouches]    = fitTrendline(tlAscIdx,  tlAscPrice,  "ascending")
+[descSlope, descIntercept, descTouches] = fitTrendline(tlDescIdx, tlDescPrice, "descending")
+
+ascTlPrice  = ascTouches  >= i_srMinTouches ? ascSlope  * bar_index + ascIntercept  : na
+descTlPrice = descTouches >= i_srMinTouches ? descSlope * bar_index + descIntercept : na
+
+// ─── PLOT TRENDLINE CURRENT PRICE ──────────────────────────────────────────────
+
+plot(i_showTrendlines ? ascTlPrice  : na, "Ascending TL",  color.new(color.green, 40), style=plot.style_circles, linewidth=2)
+plot(i_showTrendlines ? descTlPrice : na, "Descending TL", color.new(color.red, 40),   style=plot.style_circles, linewidth=2)
+
+// ─── SIGNAL DETECTION ──────────────────────────────────────────────────────────
+
+var int entryBar = 0
+
+// Rejection candle helpers
+candleRange  = high - low
+bullishRejection = candleRange > 0 and close > open and ((close - low) / candleRange) >= 0.5
+bearishRejection = candleRange > 0 and close < open and ((high - close) / candleRange) >= 0.5
+
+// --- S/R Bounce Long ---
+srBounceLong = false
+srBounceLongLevel = 0.0
+if emaBullish and bullishRejection and strategy.position_size == 0
+    for i = 0 to array.size(srPrices) - 1
+        if array.get(srTypes, i) == "support" and array.get(srTouches, i) >= i_srMinTouches
+            lvl = array.get(srPrices, i)
+            proxRange = close * i_entryProxPct / 100
+            if math.abs(low - lvl) <= proxRange
+                srBounceLong      := true
+                srBounceLongLevel := lvl
+                break
+
+// --- S/R Bounce Short ---
+srBounceShort = false
+srBounceShortLevel = 0.0
+if emaBearish and bearishRejection and strategy.position_size == 0
+    for i = 0 to array.size(srPrices) - 1
+        if array.get(srTypes, i) == "resistance" and array.get(srTouches, i) >= i_srMinTouches
+            lvl = array.get(srPrices, i)
+            proxRange = close * i_entryProxPct / 100
+            if math.abs(high - lvl) <= proxRange
+                srBounceShort      := true
+                srBounceShortLevel := lvl
+                break
+
+// --- Trendline Bounce Long ---
+tlBounceLong = false
+if emaBullish and bullishRejection and strategy.position_size == 0
+    if not na(ascTlPrice)
+        proxRange = close * i_entryProxPct / 100
+        if math.abs(low - ascTlPrice) <= proxRange and close > ascTlPrice
+            tlBounceLong := true
+
+// --- Trendline Bounce Short ---
+tlBounceShort = false
+if emaBearish and bearishRejection and strategy.position_size == 0
+    if not na(descTlPrice)
+        proxRange = close * i_entryProxPct / 100
+        if math.abs(high - descTlPrice) <= proxRange and close < descTlPrice
+            tlBounceShort := true
+
+// ─── CALCULATE SL / TP ────────────────────────────────────────────────────────
+
+// Long setup
+goLong  = (srBounceLong or tlBounceLong) and not atrExhausted
+slLong  = close * (1 - i_slPct / 100)
+tpLongLevel = findNextResistance()
+riskLong    = close - slLong
+tpLong  = not na(tpLongLevel) ? tpLongLevel : close + riskLong * i_minRR
+rrLong  = riskLong > 0 ? (tpLong - close) / riskLong : 0.0
+
+// Short setup
+goShort  = (srBounceShort or tlBounceShort) and not atrExhausted
+slShort  = close * (1 + i_slPct / 100)
+tpShortLevel = findNextSupport()
+riskShort    = slShort - close
+tpShort  = not na(tpShortLevel) ? tpShortLevel : close - riskShort * i_minRR
+rrShort  = riskShort > 0 ? (close - tpShort) / riskShort : 0.0
+
+// Apply min R:R filter
+goLong  := goLong  and rrLong  >= i_minRR
+goShort := goShort and rrShort >= i_minRR
+
+// ─── ENTRIES ───────────────────────────────────────────────────────────────────
+
+if goLong
+    strategy.entry("Long", strategy.long)
+    entryBar := bar_index
+
+if goShort
+    strategy.entry("Short", strategy.short)
+    entryBar := bar_index
+
+// ─── EXIT MANAGEMENT ──────────────────────────────────────────────────────────
+
+// Fixed SL + TP
+if strategy.position_size > 0
+    strategy.exit("Long Exit", "Long", stop=slLong, limit=tpLong,
+                  trail_points=i_trailEnabled ? close * i_trailPct / 100 / syminfo.mintick : na,
+                  trail_offset=i_trailEnabled ? close * i_trailPct / 100 / syminfo.mintick : na)
+
+if strategy.position_size < 0
+    strategy.exit("Short Exit", "Short", stop=slShort, limit=tpShort,
+                  trail_points=i_trailEnabled ? close * i_trailPct / 100 / syminfo.mintick : na,
+                  trail_offset=i_trailEnabled ? close * i_trailPct / 100 / syminfo.mintick : na)
+
+// Time stop
+barsInTrade = bar_index - entryBar
+if strategy.position_size != 0 and barsInTrade >= i_timeStopBars
+    strategy.close_all("Time Stop")
+
+// ─── PLOT S/R LEVELS ───────────────────────────────────────────────────────────
+
+// Draw the top 5 strongest S/R levels as horizontal lines
+var line[] srLines  = array.new_line()
+var label[] srLabels = array.new_label()
+
+if i_showLevels and barstate.islast
+    // Clean previous
+    for i = 0 to array.size(srLines) - 1
+        line.delete(array.get(srLines, i))
+    for i = 0 to array.size(srLabels) - 1
+        label.delete(array.get(srLabels, i))
+    array.clear(srLines)
+    array.clear(srLabels)
+
+    // Sort by touches (simple selection of top levels)
+    drawn = 0
+    for t = 20 to i_srMinTouches
+        if drawn >= 8
+            break
+        for i = 0 to array.size(srPrices) - 1
+            if drawn >= 8
+                break
+            if array.get(srTouches, i) == t
+                lvl     = array.get(srPrices, i)
+                lType   = array.get(srTypes, i)
+                touches = array.get(srTouches, i)
+                col = lType == "support" ? color.new(color.green, 60) : color.new(color.red, 60)
+                l = line.new(bar_index - 100, lvl, bar_index + 10, lvl,
+                             color=col, width=2, style=line.style_dashed)
+                lb = label.new(bar_index + 12, lvl,
+                              str.tostring(touches) + "t " + lType,
+                              style=label.style_label_left,
+                              color=color.new(color.gray, 80),
+                              textcolor=lType == "support" ? color.green : color.red,
+                              size=size.small)
+                array.push(srLines, l)
+                array.push(srLabels, lb)
+                drawn += 1
+
+// ─── SIGNAL SHAPES ─────────────────────────────────────────────────────────────
+
+plotshape(goLong,  "Long Signal",  shape.triangleup,   location.belowbar, color.green, size=size.small)
+plotshape(goShort, "Short Signal", shape.triangledown,  location.abovebar, color.red,   size=size.small)
+
+// ─── INFO TABLE ────────────────────────────────────────────────────────────────
+
+var table infoTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 80))
+
+if barstate.islast
+    table.cell(infoTable, 0, 0, "EMA Trend",   text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, emaBullish ? "BULLISH" : emaBearish ? "BEARISH" : "NEUTRAL",
+               text_color=emaBullish ? color.green : emaBearish ? color.red : color.gray,
+               text_size=size.small)
+
+    table.cell(infoTable, 0, 1, "ATR",          text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 1, str.tostring(atrValue, "#.####") + (atrExhausted ? " EXHAUSTED" : " OK"),
+               text_color=atrExhausted ? color.red : color.green, text_size=size.small)
+
+    table.cell(infoTable, 0, 2, "S/R Levels",   text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 2, str.tostring(array.size(srPrices)),
+               text_color=color.white, text_size=size.small)
+
+    table.cell(infoTable, 0, 3, "Asc TL",       text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 3, ascTouches >= i_srMinTouches ? str.tostring(ascTouches) + " touches" : "none",
+               text_color=ascTouches >= i_srMinTouches ? color.green : color.gray, text_size=size.small)
+
+    table.cell(infoTable, 0, 4, "Desc TL",      text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 4, descTouches >= i_srMinTouches ? str.tostring(descTouches) + " touches" : "none",
+               text_color=descTouches >= i_srMinTouches ? color.red : color.gray, text_size=size.small)
+
+    table.cell(infoTable, 0, 5, "Bars in Trade", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 5, strategy.position_size != 0 ? str.tostring(barsInTrade) + "/" + str.tostring(i_timeStopBars) : "-",
+               text_color=color.white, text_size=size.small)
