@@ -5,8 +5,8 @@
   "api_port": 8080,
   "log_level": "INFO",
   "watchlist": {
-    "crypto_spot": ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD"],
-    "xstocks": ["AAPLx", "TSLAx", "MSFTx", "NVDAx", "SPYx"],
+    "crypto_spot": ["XBT/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD"],
+    "xstocks": [],
     "spot_fx": ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD"],
     "futures": ["PF_XBTUSD", "PF_ETHUSD", "PF_SOLUSD"]
   },
