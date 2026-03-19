@@ -1,0 +1,69 @@
+{
+  "mode": "dry-run",
+  "db_path": "kraken_bot.db",
+  "api_host": "0.0.0.0",
+  "api_port": 8080,
+  "log_level": "INFO",
+  "watchlist": {
+    "crypto_spot": ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD"],
+    "xstocks": ["AAPLx", "TSLAx", "MSFTx", "NVDAx", "SPYx"],
+    "spot_fx": ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD"],
+    "futures": ["PF_XBTUSD", "PF_ETHUSD", "PF_SOLUSD"]
+  },
+  "strategy": {
+    "timeframe": "1h",
+    "lookback_candles": 500,
+    "pivot_left": 3,
+    "pivot_right": 3,
+    "sr_tolerance_pct": 0.5,
+    "sr_min_touches": 4,
+    "trendline_min_touches": 4,
+    "trendline_max_deviation_pct": 0.3,
+    "ema_fast": 20,
+    "ema_slow": 50,
+    "ema_macro": 200,
+    "use_macro_filter": false,
+    "entry_proximity_pct": 0.3,
+    "min_rr_ratio": 1.5
+  },
+  "risk": {
+    "initial_equity": 100.0,
+    "risk_per_trade_pct": 5.0,
+    "stop_loss_pct": 5.0,
+    "max_trades_per_day": 5,
+    "kill_switch_daily_dd_pct": 15.0,
+    "kill_switch_weekly_dd_pct": 15.0,
+    "max_leverage": 2.0,
+    "default_leverage": 2.0,
+    "trailing_enabled": true,
+    "trailing_activation_r": 1.0,
+    "trailing_atr_multiplier": 1.5,
+    "trailing_pct": 2.0,
+    "time_stop_candles": 18,
+    "position_flip_enabled": true
+  },
+  "execution": {
+    "max_spread_fx_pips": 2.0,
+    "max_cost_tp_ratio": 0.15,
+    "max_slippage_pct": 0.03,
+    "slippage_cancel_pct": 0.05,
+    "atr_filter_threshold": 0.80,
+    "atr_period": 14,
+    "atr_daily_lookback": 14,
+    "post_only_enabled": true,
+    "dead_man_switch_timeout_spot": 60,
+    "dead_man_switch_timeout_futures": 60,
+    "rate_limit_buffer_pct": 0.8
+  },
+  "alerts": {
+    "telegram_enabled": false,
+    "telegram_token": "",
+    "telegram_chat_id": "",
+    "email_enabled": false,
+    "email_smtp_host": "smtp.gmail.com",
+    "email_smtp_port": 587,
+    "email_from": "",
+    "email_to": "",
+    "email_password": ""
+  }
+}
