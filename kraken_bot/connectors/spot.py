@@ -102,7 +102,7 @@ class KrakenSpotConnector:
         resp = await self._client.get(f"{SPOT_REST_URL}/0/public/OHLC", params=params)
         data = resp.json()
         if data.get("error"):
-            logger.error(f"OHLC error for {pair}: {data['error']}")
+            logger.warning(f"OHLC not available for {pair}: {data['error']}")
             return []
         result = data.get("result", {})
         for key in result:

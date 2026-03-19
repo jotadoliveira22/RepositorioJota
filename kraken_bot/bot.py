@@ -194,13 +194,31 @@ class TradingBot:
             await self._analyze_symbol(human_name, exchange_id, "fx", is_fx=True, pip_size=pip_size)
 
     async def _analyze_xstocks(self):
-        """Analyze xStocks (weekday only)."""
+        """Analyze xStocks (weekday only).
+
+        Note: Kraken does not support OHLC for tokenized stock pairs.
+        We use ticker data for price tracking instead.
+        """
         if not is_weekday():
             return
         for human_name, exchange_id in self._spot_pairs.items():
             if human_name not in self.config.watchlist.xstocks:
                 continue
-            await self._analyze_symbol(human_name, exchange_id, "xstock", is_fx=False)
+            try:
+                # OHLC is not available for xStocks on Kraken,
+                # so we use ticker data for price monitoring
+                ticker = await self.spot.get_ticker(exchange_id)
+                if not ticker:
+                    continue
+                for _key, info in ticker.items():
+                    last_price = float(info.get("c", [0])[0])
+                    if last_price > 0:
+                        self._current_prices[exchange_id] = last_price
+                        logger.info(f"xStock {human_name} ({exchange_id}) price: {last_price:.2f}")
+                    break
+            except Exception as e:
+                logger.error(f"xStock ticker error for {human_name}: {e}")
+                self.db.log_event("ERROR", "xstock_ticker_error", str(e), human_name)
 
     async def _analyze_futures(self):
         """Analyze futures instruments."""
