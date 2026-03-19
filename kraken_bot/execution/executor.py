@@ -58,8 +58,8 @@ class OrderExecutor:
 
         # Calculate position size
         leverage = self.risk.validate_leverage(self.cfg.risk.default_leverage)
-        if signal.market_type == "spot":
-            leverage = 1.0  # No leverage on spot
+        if signal.market_type in ("spot", "xstock"):
+            leverage = 1.0  # No leverage on spot or xStocks
 
         size, valid, size_reason = self.risk.calculate_position_size(
             signal.entry_price, signal.sl_price, leverage
@@ -125,6 +125,7 @@ class OrderExecutor:
                 volume=volume, price=price, price2=price2,
                 post_only=post_only, client_order_id=client_order_id,
                 leverage=str(int(leverage)) if leverage > 1 else None,
+                asset_class="tokenized_asset" if market_type == "xstock" else None,
             )
             cid = result.get("client_order_id", client_order_id or "unknown")
         else:

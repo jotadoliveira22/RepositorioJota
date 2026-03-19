@@ -84,21 +84,27 @@ class KrakenSpotConnector:
         self._asset_pairs.update(data.get("result", {}))
         return data.get("result", {})
 
-    async def get_ticker(self, pair: str) -> Dict:
+    async def get_ticker(self, pair: str, asset_class: Optional[str] = None) -> Dict:
         await self._rate_limiter.wait("public")
-        resp = await self._client.get(f"{SPOT_REST_URL}/0/public/Ticker", params={"pair": pair})
+        params: Dict[str, Any] = {"pair": pair}
+        if asset_class:
+            params["asset_class"] = asset_class
+        resp = await self._client.get(f"{SPOT_REST_URL}/0/public/Ticker", params=params)
         data = resp.json()
         if data.get("error"):
             logger.error(f"Ticker error for {pair}: {data['error']}")
             return {}
         return data.get("result", {})
 
-    async def get_ohlc(self, pair: str, interval: int = 60, since: Optional[int] = None) -> List:
+    async def get_ohlc(self, pair: str, interval: int = 60, since: Optional[int] = None,
+                       asset_class: Optional[str] = None) -> List:
         """Get OHLC data. interval in minutes (60=1H)."""
         await self._rate_limiter.wait("public")
-        params = {"pair": pair, "interval": interval}
+        params: Dict[str, Any] = {"pair": pair, "interval": interval}
         if since:
             params["since"] = since
+        if asset_class:
+            params["asset_class"] = asset_class
         resp = await self._client.get(f"{SPOT_REST_URL}/0/public/OHLC", params=params)
         data = resp.json()
         if data.get("error"):
@@ -110,11 +116,14 @@ class KrakenSpotConnector:
                 return result[key]
         return []
 
-    async def get_order_book(self, pair: str, count: int = 10) -> Dict:
+    async def get_order_book(self, pair: str, count: int = 10,
+                             asset_class: Optional[str] = None) -> Dict:
         await self._rate_limiter.wait("public")
+        params: Dict[str, Any] = {"pair": pair, "count": count}
+        if asset_class:
+            params["asset_class"] = asset_class
         resp = await self._client.get(
-            f"{SPOT_REST_URL}/0/public/Depth",
-            params={"pair": pair, "count": count}
+            f"{SPOT_REST_URL}/0/public/Depth", params=params
         )
         data = resp.json()
         if data.get("error"):
@@ -124,9 +133,9 @@ class KrakenSpotConnector:
             return result[key]
         return {}
 
-    async def get_spread(self, pair: str) -> float:
+    async def get_spread(self, pair: str, asset_class: Optional[str] = None) -> float:
         """Get current bid-ask spread as percentage."""
-        book = await self.get_order_book(pair, count=1)
+        book = await self.get_order_book(pair, count=1, asset_class=asset_class)
         if not book or "asks" not in book or "bids" not in book:
             return float('inf')
         best_ask = float(book["asks"][0][0])
@@ -196,6 +205,7 @@ class KrakenSpotConnector:
         post_only: bool = False,
         client_order_id: Optional[str] = None,
         validate: bool = False,
+        asset_class: Optional[str] = None,
     ) -> Dict:
         """Place an order on Kraken Spot."""
         if self.dry_run and not validate:
@@ -223,6 +233,8 @@ class KrakenSpotConnector:
             data["oflags"] = "post"
         if validate:
             data["validate"] = "true"
+        if asset_class:
+            data["asset_class"] = asset_class
 
         result = await self._private_request("AddOrder", data)
         if result.get("error"):

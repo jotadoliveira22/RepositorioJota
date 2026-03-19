@@ -74,7 +74,7 @@ class TradingBot:
             "1.0.0"
         )
 
-        # Discover spot pairs (excluding xStocks which don't support public API queries)
+        # Discover spot pairs (crypto + FX)
         all_watchlist = (
             self.config.watchlist.crypto_spot +
             self.config.watchlist.spot_fx
@@ -86,9 +86,16 @@ class TradingBot:
             logger.error(f"Spot discovery failed: {e}")
             self.db.log_event("ERROR", "discovery_failed", f"Spot: {e}")
 
+        # Discover xStocks pairs (tokenized equities)
         if self.config.watchlist.xstocks:
-            logger.info(f"xStocks watchlist configured but Kraken public API does not support "
-                         f"Ticker/OHLC for tokenized assets — skipping: {self.config.watchlist.xstocks}")
+            try:
+                xstock_mapping = await self.spot.discover_pairs(self.config.watchlist.xstocks)
+                self._spot_pairs.update(xstock_mapping)
+                logger.info(f"Discovered {len(xstock_mapping)} xStocks pairs: "
+                            f"{list(xstock_mapping.keys())}")
+            except Exception as e:
+                logger.error(f"xStocks discovery failed: {e}")
+                self.db.log_event("ERROR", "discovery_failed", f"xStocks: {e}")
 
         # Discover futures instruments
         try:
@@ -176,6 +183,7 @@ class TradingBot:
         # Analyze all watchlist symbols
         await self._analyze_spot_crypto()
         await self._analyze_spot_fx()
+        await self._analyze_xstocks()
         await self._analyze_futures()
 
     async def _analyze_spot_crypto(self):
@@ -194,6 +202,18 @@ class TradingBot:
                 continue
             pip_size = 0.01 if "JPY" in human_name else 0.0001
             await self._analyze_symbol(human_name, exchange_id, "fx", is_fx=True, pip_size=pip_size)
+
+    async def _analyze_xstocks(self):
+        """Analyze xStocks pairs (weekday only, 24/5 market)."""
+        if not is_weekday():
+            return
+        for human_name, exchange_id in self._spot_pairs.items():
+            if human_name not in self.config.watchlist.xstocks:
+                continue
+            await self._analyze_symbol(
+                human_name, exchange_id, "xstock", is_fx=False,
+                asset_class="tokenized_asset",
+            )
 
     async def _analyze_futures(self):
         """Analyze futures instruments."""
@@ -231,10 +251,13 @@ class TradingBot:
 
     async def _analyze_symbol(self, human_name: str, exchange_id: str,
                                market_type: str, is_fx: bool = False,
-                               pip_size: float = 0.0001):
+                               pip_size: float = 0.0001,
+                               asset_class: Optional[str] = None):
         """Analyze a single spot symbol."""
         try:
-            candles_raw = await self.spot.get_ohlc(exchange_id, interval=60)
+            candles_raw = await self.spot.get_ohlc(
+                exchange_id, interval=60, asset_class=asset_class
+            )
             if not candles_raw or len(candles_raw) < 50:
                 self.db.log_event("DEBUG", "insufficient_candles",
                                 f"{human_name}: {len(candles_raw) if candles_raw else 0} candles",
@@ -248,7 +271,7 @@ class TradingBot:
             if candles:
                 self._current_prices[exchange_id] = candles[-1]["close"]
 
-            spread_pct = await self.spot.get_spread(exchange_id)
+            spread_pct = await self.spot.get_spread(exchange_id, asset_class=asset_class)
 
             signals = self.strategy.analyze(
                 exchange_id, market_type, candles, spread_pct, is_fx, pip_size
