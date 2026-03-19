@@ -67,12 +67,15 @@ class KrakenSpotConnector:
         resp = await self._client.get(f"{SPOT_REST_URL}/0/public/Time")
         return resp.json()
 
-    async def get_asset_pairs(self, pairs: Optional[List[str]] = None) -> Dict[str, Dict]:
+    async def get_asset_pairs(self, pairs: Optional[List[str]] = None,
+                              aclass_base: Optional[str] = None) -> Dict[str, Dict]:
         """Fetch tradable asset pairs."""
         await self._rate_limiter.wait("public")
         params = {}
         if pairs:
             params["pair"] = ",".join(pairs)
+        if aclass_base:
+            params["aclass_base"] = aclass_base
         resp = await self._client.get(f"{SPOT_REST_URL}/0/public/AssetPairs", params=params)
         data = resp.json()
         if data.get("error"):
@@ -378,6 +381,9 @@ class KrakenSpotConnector:
     async def discover_pairs(self, watchlist: List[str]) -> Dict[str, str]:
         """Map human-readable pair names to Kraken pair IDs."""
         all_pairs = await self.get_asset_pairs()
+        # Also fetch tokenized stock pairs (xStocks)
+        xstock_pairs = await self.get_asset_pairs(aclass_base="tokenized_asset")
+        all_pairs.update(xstock_pairs)
         mapping = {}
         for wanted in watchlist:
             clean = wanted.replace("/", "")
