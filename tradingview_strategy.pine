@@ -104,12 +104,13 @@ var int     maxLevels  = 50
 // Helper: find if a price matches an existing level within tolerance
 findLevel(price) =>
     idx = -1
-    for i = 0 to array.size(srPrices) - 1
-        lvl = array.get(srPrices, i)
-        tol = lvl * i_srTolPct / 100
-        if math.abs(price - lvl) <= tol
-            idx := i
-            break
+    if array.size(srPrices) > 0
+        for i = 0 to array.size(srPrices) - 1
+            lvl = array.get(srPrices, i)
+            tol = lvl * i_srTolPct / 100
+            if math.abs(price - lvl) <= tol
+                idx := i
+                break
     idx
 
 // Add or update S/R level
@@ -161,25 +162,27 @@ if array.size(srPrices) > 0
 findNextResistance() =>
     best = 0.0
     found = false
-    for i = 0 to array.size(srPrices) - 1
-        if array.get(srTypes, i) == "resistance" and array.get(srTouches, i) >= i_srMinTouches
-            p = array.get(srPrices, i)
-            if p > close * 1.001
-                if not found or p < best
-                    best := p
-                    found := true
+    if array.size(srPrices) > 0
+        for i = 0 to array.size(srPrices) - 1
+            if array.get(srTypes, i) == "resistance" and array.get(srTouches, i) >= i_srMinTouches
+                p = array.get(srPrices, i)
+                if p > close * 1.001
+                    if not found or p < best
+                        best := p
+                        found := true
     found ? best : na
 
 findNextSupport() =>
     best = 0.0
     found = false
-    for i = 0 to array.size(srPrices) - 1
-        if array.get(srTypes, i) == "support" and array.get(srTouches, i) >= i_srMinTouches
-            p = array.get(srPrices, i)
-            if p < close * 0.999
-                if not found or p > best
-                    best := p
-                    found := true
+    if array.size(srPrices) > 0
+        for i = 0 to array.size(srPrices) - 1
+            if array.get(srTypes, i) == "support" and array.get(srTouches, i) >= i_srMinTouches
+                p = array.get(srPrices, i)
+                if p < close * 0.999
+                    if not found or p > best
+                        best := p
+                        found := true
     found ? best : na
 
 // ─── TRENDLINE TRACKING ────────────────────────────────────────────────────────
@@ -261,7 +264,7 @@ bearishRejection = candleRange > 0 and close < open and ((high - close) / candle
 // --- S/R Bounce Long ---
 srBounceLong = false
 srBounceLongLevel = 0.0
-if emaBullish and bullishRejection and strategy.position_size == 0
+if emaBullish and bullishRejection and strategy.position_size == 0 and array.size(srPrices) > 0
     for i = 0 to array.size(srPrices) - 1
         if array.get(srTypes, i) == "support" and array.get(srTouches, i) >= i_srMinTouches
             lvl = array.get(srPrices, i)
@@ -274,7 +277,7 @@ if emaBullish and bullishRejection and strategy.position_size == 0
 // --- S/R Bounce Short ---
 srBounceShort = false
 srBounceShortLevel = 0.0
-if emaBearish and bearishRejection and strategy.position_size == 0
+if emaBearish and bearishRejection and strategy.position_size == 0 and array.size(srPrices) > 0
     for i = 0 to array.size(srPrices) - 1
         if array.get(srTypes, i) == "resistance" and array.get(srTouches, i) >= i_srMinTouches
             lvl = array.get(srPrices, i)
@@ -358,37 +361,40 @@ var label[] srLabels = array.new_label()
 
 if i_showLevels and barstate.islast
     // Clean previous
-    for i = 0 to array.size(srLines) - 1
-        line.delete(array.get(srLines, i))
-    for i = 0 to array.size(srLabels) - 1
-        label.delete(array.get(srLabels, i))
+    if array.size(srLines) > 0
+        for i = 0 to array.size(srLines) - 1
+            line.delete(array.get(srLines, i))
+    if array.size(srLabels) > 0
+        for i = 0 to array.size(srLabels) - 1
+            label.delete(array.get(srLabels, i))
     array.clear(srLines)
     array.clear(srLabels)
 
     // Sort by touches (simple selection of top levels)
     drawn = 0
-    for t = 20 to i_srMinTouches
-        if drawn >= 8
-            break
-        for i = 0 to array.size(srPrices) - 1
+    if array.size(srPrices) > 0
+        for t = 20 to i_srMinTouches
             if drawn >= 8
                 break
-            if array.get(srTouches, i) == t
-                lvl     = array.get(srPrices, i)
-                lType   = array.get(srTypes, i)
-                touches = array.get(srTouches, i)
-                col = lType == "support" ? color.new(color.green, 60) : color.new(color.red, 60)
-                l = line.new(bar_index - 100, lvl, bar_index + 10, lvl,
-                             color=col, width=2, style=line.style_dashed)
-                lb = label.new(bar_index + 12, lvl,
-                              str.tostring(touches) + "t " + lType,
-                              style=label.style_label_left,
-                              color=color.new(color.gray, 80),
-                              textcolor=lType == "support" ? color.green : color.red,
-                              size=size.small)
-                array.push(srLines, l)
-                array.push(srLabels, lb)
-                drawn += 1
+            for i = 0 to array.size(srPrices) - 1
+                if drawn >= 8
+                    break
+                if array.get(srTouches, i) == t
+                    lvl     = array.get(srPrices, i)
+                    lType   = array.get(srTypes, i)
+                    touches = array.get(srTouches, i)
+                    col = lType == "support" ? color.new(color.green, 60) : color.new(color.red, 60)
+                    l = line.new(bar_index - 100, lvl, bar_index + 10, lvl,
+                                 color=col, width=2, style=line.style_dashed)
+                    lb = label.new(bar_index + 12, lvl,
+                                  str.tostring(touches) + "t " + lType,
+                                  style=label.style_label_left,
+                                  color=color.new(color.gray, 80),
+                                  textcolor=lType == "support" ? color.green : color.red,
+                                  size=size.small)
+                    array.push(srLines, l)
+                    array.push(srLabels, lb)
+                    drawn += 1
 
 // ─── SIGNAL SHAPES ─────────────────────────────────────────────────────────────
 
