@@ -172,7 +172,7 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
     payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
-        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.7},
+        "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7},
     }
 
     for attempt in range(4):
@@ -257,8 +257,50 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
             return
 
 
+def _extract_complete_formats(text: str) -> dict:
+    """
+    Extract every top-level format key whose JSON object is complete
+    (matching braces) from a potentially truncated JSON string.
+    """
+    KNOWN_FORMATS = ["reel", "tiktok", "x_twitter", "carousel",
+                     "linkedin", "newsletter", "ads"]
+    result: dict = {}
+    for fmt in KNOWN_FORMATS:
+        import re as _re
+        m = _re.search(rf'"{_re.escape(fmt)}"\s*:\s*(\{{)', text)
+        if not m:
+            continue
+        start = m.start(1)
+        depth = 0
+        in_str = False
+        esc = False
+        for i, ch in enumerate(text[start:], start):
+            if esc:
+                esc = False
+                continue
+            if ch == "\\" and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+            if not in_str:
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            result[fmt] = json.loads(text[start: i + 1])
+                        except json.JSONDecodeError:
+                            pass
+                        break
+    return result
+
+
 def parse_json_result(raw: str, agent_name: str) -> dict:
-    """Parse JSON from agent output, stripping any markdown fences."""
+    """Parse JSON from agent output, stripping any markdown fences.
+    Falls back to per-format extraction when the full JSON is truncated.
+    """
     text = raw.strip()
     # Remove ```json ... ``` wrappers if present
     if text.startswith("```"):
@@ -270,6 +312,19 @@ def parse_json_result(raw: str, agent_name: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
+        # Try closing the outer object at the truncation point
+        partial = text[: e.pos]
+        last_comma = max(partial.rfind("},\n"), partial.rfind("},\r\n"))
+        if last_comma != -1:
+            try:
+                return json.loads(partial[: last_comma + 1] + "\n}")
+            except json.JSONDecodeError:
+                pass
+        # Last resort: salvage every individually complete format block
+        recovered = _extract_complete_formats(text)
+        if recovered:
+            recovered["_truncated"] = True
+            return recovered
         return {
             "parse_error": f"Could not parse {agent_name} JSON output: {str(e)}",
             "raw": raw[:2000],
