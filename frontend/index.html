@@ -26,8 +26,82 @@
   --radius:2px;
   --font:'Inter',system-ui,sans-serif;
 }
+/* ─── Light Mode Overrides ──────────────────────────────────────────────── */
+body.light{
+  --bg:#f4f4f5;
+  --surface:#e8e8ea;
+  --card:#ffffff;
+  --border:#d4d4d8;
+  --text:#111111;
+  --muted:#888888;
+  --light:#555555;
+}
+
 html,body{height:100%;overflow:hidden}
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;display:flex;flex-direction:row}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;display:flex;flex-direction:row;transition:background .2s,color .2s}
+
+/* ─── Theme Toggle Button ───────────────────────────────────────────────── */
+.theme-divider{width:1px;height:20px;background:var(--border);margin:0 4px}
+.btn-theme-toggle{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:0;border:1px solid var(--border);
+  background:transparent;color:var(--light);cursor:pointer;
+  font-size:16px;transition:all .15s;flex-shrink:0;
+}
+.btn-theme-toggle:hover{border-color:var(--accent);color:var(--text)}
+
+/* ─── Light mode specific overrides ────────────────────────────────────── */
+body.light #sidenav{background:#ffffff;border-right-color:#e0e0e0}
+body.light .snav-item:hover{background:#f0f0f0}
+body.light .snav-item.active{background:#f0f0f0;border-left-color:var(--accent)}
+body.light .snav-logo-img{filter:none}
+body.light #topbar{background:#ffffff;border-bottom-color:#e0e0e0}
+body.light #main{background:var(--bg)}
+body.light #sidebar{background:#fafafa;border-right-color:#e0e0e0}
+body.light #agents-row{border-bottom-color:#e0e0e0}
+body.light .agent-card{background:#ffffff;border-right-color:#e0e0e0}
+body.light .agent-card.running{background:#fff8f8}
+body.light .agent-preview{border-top-color:#e0e0e0;color:#aaa}
+body.light .agent-preview.streaming{color:#666}
+body.light .research-card{background:#ffffff;border-color:#e0e0e0}
+body.light .insight-card{background:#ffffff;border-color:#e0e0e0}
+body.light .viral-card{background:#ffffff}
+body.light .hook-item{background:#ffffff;border-color:#e0e0e0}
+body.light .content-block{background:#ffffff;border-color:#e0e0e0}
+body.light .results-body{background:#f4f4f5;border-color:#e0e0e0}
+body.light .tab-content{background:transparent}
+body.light .status-idle{border-color:#ccc;color:#aaa}
+body.light .section-title{color:#aaa;border-bottom-color:#e0e0e0}
+body.light .field label{color:#555}
+body.light .field input[type=text],
+body.light .field textarea,
+body.light .field select{background:#ffffff;border-color:#d0d0d0;color:#111}
+body.light .radio-group label,
+body.light .check-group label{background:#ffffff;border-color:#d0d0d0;color:#444}
+body.light .radio-group label.active,
+body.light .check-group label.active{background:rgba(204,0,0,.06);border-color:var(--accent);color:#cc0000}
+body.light .btn-ghost{border-color:#d0d0d0;color:#666}
+body.light .btn-ghost:hover{border-color:var(--accent);color:#111}
+body.light .run-badge{border-color:#d0d0d0;color:#999}
+body.light .tabs{border-bottom-color:#e0e0e0}
+body.light .tab{color:#aaa}
+body.light .tab.active{color:#111}
+body.light .format-tab{border-color:#d0d0d0;color:#888;background:#fff}
+body.light .format-tab.active{border-color:var(--accent);color:#111;background:#fff}
+body.light .log-entry{border-bottom-color:#e0e0e0}
+body.light .log-time{color:#bbb}
+body.light .log-msg{color:#555}
+body.light #toast{background:#ffffff;border-color:#e0e0e0;color:#111}
+body.light .empty-state{color:#bbb}
+body.light .empty-state h3{color:#888}
+body.light ::-webkit-scrollbar-thumb{background:#d0d0d0}
+body.light .fact-item{border-bottom-color:#e0e0e0;color:#555}
+body.light .source-item{border-bottom-color:#e0e0e0}
+body.light .snav-bottom{border-top-color:#e0e0e0}
+body.light .snav-items .snav-item{color:#bbb}
+body.light .ab-variant{background:#f8f8f8;border-color:#e0e0e0}
+body.light .selection-bar{background:#f4f4f5;border-top-color:#e0e0e0}
+body.light .topbar-brand-sub{color:var(--accent)}
 
 /* ─── Side Nav ──────────────────────────────────────────────────────────── */
 #sidenav{
@@ -409,6 +483,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     <button class="btn btn-ghost btn-sm" id="btn-export-json" onclick="exportJSON()" disabled>&#8595; JSON</button>
     <button class="btn btn-ghost btn-sm" id="btn-export-md" onclick="exportMarkdown()" disabled>&#8595; MD</button>
     <button class="btn btn-pipeline" id="btn-pipeline" onclick="runResearch()">&#9654; RUN RESEARCH</button>
+    <div class="theme-divider"></div>
+    <button class="btn btn-theme-toggle" id="btn-theme" onclick="toggleTheme()" title="Cambiar tema">
+      <span id="theme-icon">&#9790;</span>
+    </button>
   </div>
 </header>
 
@@ -878,6 +956,21 @@ function updateAgentPreview(agent, text) {
 }
 
 // ── Side Nav ──────────────────────────────────────────────────────────────
+// ── Theme Toggle ──────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  document.getElementById('theme-icon').textContent = isLight ? '☀' : '☽';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+// Apply saved theme on load
+(function(){
+  if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light');
+    const icon = document.getElementById('theme-icon');
+    if (icon) icon.textContent = '☀';
+  }
+})();
+
 function snavGo(tabName) {
   // Update sidenav active item
   document.querySelectorAll('.snav-item[id^="snav-"]').forEach(el => el.classList.remove('active'));
