@@ -7,7 +7,7 @@ Generates platform-ready content for all selected formats.
 SYSTEM_PROMPT = """\
 You are Writer, an elite Copywriter and Content Producer for a performance marketing agency.
 
-Your role: Produce platform-specific content that sounds human, drives engagement, and converts. You write Reels, Carousels, LinkedIn posts, Newsletters, and Ads with equal mastery.
+Your role: Produce platform-specific content that sounds human, drives engagement, and converts. You write Reels, TikToks, X/Twitter threads, Carousels, LinkedIn posts, Newsletters, and Ads with equal mastery.
 
 PRINCIPLES:
 - Hooks must stop the scroll in the first 3 seconds
@@ -16,6 +16,8 @@ PRINCIPLES:
 - Ads must have A/B variants and cold/warm/hot audience segmentation
 - Hashtags are research-based, not random
 - Content must be immediately publishable with minimal edits
+- TikTok: native, trend-aware, lo-fi authentic style — entertain first, sell second
+- X/Twitter: sharp, concise, opinionated — threads for depth, single tweets for reach
 
 CRITICAL RULES:
 1. Base content ONLY on the provided research and insights
@@ -33,6 +35,23 @@ OUTPUT SCHEMA (strict JSON) — include only requested formats:
     "broll_notes": "Visual suggestions and b-roll ideas",
     "hashtags": ["#hashtag1", "#hashtag2"],
     "duration_estimate": "30s|45s|60s"
+  },
+  "tiktok": {
+    "hook": "First 2 seconds — action or text to stop the scroll",
+    "script": "Full script with TikTok-native pacing, slang, and trend references",
+    "text_overlays": ["Overlay at 0s", "Overlay at 5s", "Overlay at 10s"],
+    "sounds_note": "Trending sound or original audio direction",
+    "cta": "Call-to-action (follow, comment, link in bio)",
+    "hashtags": ["#hashtag1", "#hashtag2"],
+    "duration_estimate": "15s|30s|60s",
+    "trend_note": "TikTok format or trend to leverage for this content"
+  },
+  "x_twitter": {
+    "hook_tweet": "Thread opener or standalone hook tweet (≤280 chars)",
+    "thread": ["Tweet 1/N — opening argument", "Tweet 2/N — key point", "Tweet 3/N — evidence or example", "Tweet 4/N — insight", "Tweet 5/N — CTA closer"],
+    "cta_tweet": "Final thread tweet with call-to-action (≤280 chars)",
+    "standalone_tweet": "Single-tweet version when thread is not used (≤280 chars)",
+    "hashtags": ["#hashtag1"]
   },
   "carousel": {
     "slides": [
@@ -130,7 +149,18 @@ def build_user_prompt(config: dict, scout_result: dict, analyst_result: dict) ->
         "long": "Detailed. Reels: 60-90s. LinkedIn: 500-700 words. Newsletter: 600-800 words. Ads: 125-150 chars primary text.",
     }
 
-    formats_list = ", ".join(formats) if formats else "Reel, Carousel, LinkedIn, Newsletter, Ads"
+    # Normalize UI format names → exact JSON schema keys used in the prompt
+    _fmt_map = {
+        "reel": "reel", "Reel": "reel",
+        "tiktok": "tiktok", "TikTok": "tiktok",
+        "x_twitter": "x_twitter", "X_Twitter": "x_twitter", "X": "x_twitter",
+        "carousel": "carousel", "Carousel": "carousel",
+        "linkedin": "linkedin", "LinkedIn": "linkedin",
+        "newsletter": "newsletter", "Newsletter": "newsletter",
+        "ads": "ads", "Ads": "ads",
+    }
+    norm_formats = [_fmt_map.get(f, f.lower()) for f in formats]
+    formats_list = ", ".join(norm_formats) if norm_formats else "reel, carousel, linkedin, newsletter, ads"
 
     output_lang_note = ""
     if language == "ES":

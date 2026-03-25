@@ -290,8 +290,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 <!-- ───────────────── PIPELINE BAR ───────────────────────────────────── -->
 <div class="pipeline-bar">
   <div style="display:flex;align-items:center;gap:10px">
-    <button class="btn btn-pipeline" id="btn-pipeline" onclick="runPipeline()" style="width:auto;padding:8px 20px">
-      ▶ Run Full Pipeline
+    <button class="btn btn-pipeline" id="btn-pipeline" onclick="runResearch()" style="width:auto;padding:8px 20px">
+      ▶ Run Full Research
     </button>
     <button class="btn btn-ghost btn-sm" onclick="resetAll()">↺ Reset</button>
   </div>
@@ -353,6 +353,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <label>Formatos a generar</label>
         <div class="check-group" id="cg-formats">
           <label class="active"><input type="checkbox" value="Reel" checked>Reel</label>
+          <label class="active"><input type="checkbox" value="TikTok" checked>TikTok</label>
+          <label class="active"><input type="checkbox" value="X_Twitter" checked>X / Twitter</label>
           <label class="active"><input type="checkbox" value="Carousel" checked>Carrusel</label>
           <label class="active"><input type="checkbox" value="LinkedIn" checked>LinkedIn</label>
           <label><input type="checkbox" value="Newsletter">Newsletter</label>
@@ -551,6 +553,7 @@ let isPipelineRunning = false;
 let isAgentRunning = false;
 let _lastAnalystResult = null;
 let insightSel = { insights: new Set(), viral_angles: new Set(), content_hooks: new Set() };
+let _selectionConfirmed = false;
 
 // ─── Radio/Checkbox UI ─────────────────────────────────────────────────────
 document.querySelectorAll('.radio-group').forEach(group => {
@@ -683,71 +686,29 @@ async function streamAgent(runId, agentName) {
   });
 }
 
-// ─── Run Full Pipeline ─────────────────────────────────────────────────────
-async function runPipeline() {
+// ─── Run Full Research (Scout + Analyst only) ───────────────────────────────
+async function runResearch() {
   if (isPipelineRunning || isAgentRunning) return;
   isPipelineRunning = true;
+  _selectionConfirmed = false;
   setBusy(true);
 
   const runId = await createRun();
   if (!runId) { isPipelineRunning = false; setBusy(false); return; }
 
-  addLog('info', 'Pipeline iniciado');
+  addLog('info', 'Research iniciado: Scout → Analyst');
 
-  return new Promise((resolve) => {
-    const es = new EventSource(`/api/runs/${runId}/pipeline/stream`);
-    const agentTexts = {};
+  try {
+    await streamAgent(runId, 'scout');
+    await streamAgent(runId, 'analyst');
+    showToast('Research completo — selecciona los insights y haz clic en "Escribir con seleccionados"', 'success');
+    addLog('info', 'Research finalizado. Selecciona insights para continuar.');
+  } catch(e) {
+    // error already shown in streamAgent
+  }
 
-    es.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-
-      if (data.type === 'status') {
-        setAgentStatus(data.agent, data.status);
-      }
-      else if (data.type === 'text') {
-        agentTexts[data.agent] = (agentTexts[data.agent] || '') + data.content;
-        updateAgentPreview(data.agent, agentTexts[data.agent]);
-      }
-      else if (data.type === 'done') {
-        agentResults[data.agent] = data.result;
-        setAgentStatus(data.agent, 'done');
-        renderResult(data.agent, data.result);
-        addLog('info', `${data.agent} completado`);
-      }
-      else if (data.type === 'error') {
-        setAgentStatus(data.agent, 'error');
-        updateAgentPreview(data.agent, '❌ ' + data.error);
-        addLog('error', `${data.agent}: ${data.error}`);
-        showToast(`Error en ${data.agent}`, 'error');
-      }
-      else if (data.type === 'pipeline_done') {
-        es.close();
-        isPipelineRunning = false;
-        setBusy(false);
-        enableExports();
-        showToast('Pipeline completado ✓', 'success');
-        addLog('info', 'Pipeline finalizado con éxito');
-        resolve();
-      }
-      else if (data.type === 'pipeline_abort') {
-        es.close();
-        isPipelineRunning = false;
-        setBusy(false);
-        showToast(`Pipeline abortado: ${data.reason}`, 'error');
-        addLog('error', `Pipeline abortado: ${data.reason}`);
-        resolve();
-      }
-    };
-
-    es.onerror = () => {
-      es.close();
-      isPipelineRunning = false;
-      setBusy(false);
-      addLog('error', 'Pipeline: conexión perdida');
-      showToast('Error de conexión en pipeline', 'error');
-      resolve();
-    };
-  });
+  isPipelineRunning = false;
+  setBusy(false);
 }
 
 // ─── Run single agent ──────────────────────────────────────────────────────
@@ -765,6 +726,13 @@ async function runAgent(agentName) {
   const prereq = prereqs[agentName];
   if (prereq && !agentResults[prereq]) {
     showToast(`Ejecuta ${prereq} primero`, 'error');
+    return;
+  }
+
+  // Writer requires prior insight selection via "Escribir con seleccionados"
+  if (agentName === 'writer' && !_selectionConfirmed) {
+    showToast('Ve a la pestaña Insights, elige los elementos y usa "Escribir con seleccionados"', 'error');
+    switchTab('insights');
     return;
   }
 
@@ -1017,7 +985,10 @@ function updateInsightSelBar() {
 }
 
 async function writeWithSelection() {
-  if (!currentRunId) { showToast('Ejecuta el Analyst primero', 'error'); return; }
+  if (!currentRunId) { showToast('Ejecuta el Research primero', 'error'); return; }
+  const total = insightSel.insights.size + insightSel.viral_angles.size + insightSel.content_hooks.size;
+  if (total === 0) { showToast('Selecciona al menos un elemento antes de escribir', 'error'); return; }
+
   const selection = {
     insights: [...insightSel.insights],
     viral_angles: [...insightSel.viral_angles],
@@ -1034,7 +1005,21 @@ async function writeWithSelection() {
     showToast('Error guardando selección', 'error');
     return;
   }
-  await runAgent('writer');
+
+  _selectionConfirmed = true;
+  isAgentRunning = true;
+  setBusy(true);
+  try {
+    await streamAgent(currentRunId, 'writer');
+    await streamAgent(currentRunId, 'optimizer');
+    enableExports();
+    showToast('Contenido generado y optimizado ✓', 'success');
+    addLog('info', 'Writing + Optimization completados');
+  } catch(e) {
+    // error shown inside streamAgent
+  }
+  isAgentRunning = false;
+  setBusy(false);
 }
 
 function renderDraft(r) {
@@ -1098,7 +1083,7 @@ function renderFormatsContent(content, prefix) {
     return `<div class="content-block"><pre>${escHtml(JSON.stringify(content, null, 2))}</pre></div>`;
   }
 
-  const formatKeys = ['reel','carousel','linkedin','newsletter','ads'].filter(k => content[k]);
+  const formatKeys = ['reel','tiktok','x_twitter','carousel','linkedin','newsletter','ads'].filter(k => content[k]);
   if (!formatKeys.length) {
     return `<div class="content-block"><pre style="font-size:11px">${escHtml(JSON.stringify(content, null, 2))}</pre></div>`;
   }
@@ -1119,15 +1104,14 @@ function renderFormatsContent(content, prefix) {
 function switchFormat(prefix, key, el) {
   el.closest('.format-tabs').querySelectorAll('.format-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  // find sibling panels
-  const container = el.closest('div').parentElement;
+  const container = el.closest('.format-tabs').parentElement;
   container.querySelectorAll('.format-panel').forEach(p => p.classList.remove('active'));
   const panel = document.getElementById(`${prefix}-panel-${key}`);
   if (panel) panel.classList.add('active');
 }
 
 function formatLabel(k) {
-  return { reel:'🎬 Reel', carousel:'📱 Carrusel', linkedin:'💼 LinkedIn', newsletter:'📧 Newsletter', ads:'📢 Ads' }[k] || k;
+  return { reel:'🎬 Reel', tiktok:'🎵 TikTok', x_twitter:'𝕏 X / Twitter', carousel:'📱 Carrusel', linkedin:'💼 LinkedIn', newsletter:'📧 Newsletter', ads:'📢 Ads' }[k] || k;
 }
 
 function renderFormatPanel(format, data) {
@@ -1142,6 +1126,36 @@ function renderFormatPanel(format, data) {
       ${block('🎥 B-Roll / Notas Visuales', data.broll_notes)}
       ${data.hashtags ? `<div class="content-block"><h4>Hashtags</h4><div class="keyword-cloud">${(data.hashtags||[]).map(h=>`<span class="keyword">${escHtml(h)}</span>`).join('')}</div></div>` : ''}
       ${data.duration_estimate ? `<div style="font-size:12px;color:var(--muted)">Duración estimada: ${escHtml(data.duration_estimate)}</div>` : ''}
+    `;
+  }
+  if (format === 'tiktok') {
+    const overlays = (data.text_overlays || []).map((o, i) => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:5px;padding:6px 10px;margin-bottom:4px;font-size:12px">
+        <span style="color:var(--muted);margin-right:6px">${i + 1}.</span>${escHtml(o)}
+      </div>`).join('');
+    return `
+      ${block('⚡ Hook (primeros 2s)', data.hook)}
+      ${block('📝 Script', data.script)}
+      ${overlays ? `<div class="content-block"><h4>💬 Text Overlays</h4>${overlays}</div>` : ''}
+      ${block('🎵 Audio / Sound', data.sounds_note)}
+      ${block('📢 CTA', data.cta)}
+      ${block('📌 Trend Note', data.trend_note)}
+      ${data.hashtags ? `<div class="content-block"><h4>Hashtags</h4><div class="keyword-cloud">${(data.hashtags||[]).map(h=>`<span class="keyword">${escHtml(h)}</span>`).join('')}</div></div>` : ''}
+      ${data.duration_estimate ? `<div style="font-size:12px;color:var(--muted)">Duración estimada: ${escHtml(data.duration_estimate)}</div>` : ''}
+    `;
+  }
+  if (format === 'x_twitter') {
+    const thread = (data.thread || []).map((t, i) => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:6px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${i + 1}/${data.thread.length}</div>
+        <div style="font-size:13px;color:var(--text)">${escHtml(t)}</div>
+      </div>`).join('');
+    return `
+      ${block('🎣 Hook Tweet', data.hook_tweet)}
+      ${thread ? `<div class="content-block"><h4>🧵 Thread Completo</h4>${thread}</div>` : ''}
+      ${block('📢 CTA Tweet (cierre)', data.cta_tweet)}
+      ${block('✦ Tweet Individual', data.standalone_tweet)}
+      ${data.hashtags ? `<div class="content-block"><h4>Hashtags</h4><div class="keyword-cloud">${(data.hashtags||[]).map(h=>`<span class="keyword">${escHtml(h)}</span>`).join('')}</div></div>` : ''}
     `;
   }
   if (format === 'carousel') {
