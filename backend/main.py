@@ -351,6 +351,14 @@ async def serve_frontend():
     return HTMLResponse("<h1>Frontend not found</h1>", status_code=404)
 
 
+@app.get("/logo.png")
+async def serve_logo():
+    logo_path = os.path.join(FRONTEND_DIR, "logo.png")
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path, media_type="image/png")
+    return HTMLResponse("Logo not found", status_code=404)
+
+
 @app.get("/api/categories")
 async def get_categories():
     return {"categories": RESEARCH_CATEGORIES}
