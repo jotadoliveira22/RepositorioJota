@@ -88,6 +88,20 @@ GEMINI_URL_TEMPLATE = (
 # Cache the first working model so we don't probe on every request
 _working_model: str | None = None
 
+# In-memory store of per-run insight selections (persists for the server lifetime)
+_run_selections: dict = {}
+
+
+def _apply_insight_selection(analyst_result: dict, selection: dict) -> dict:
+    """Return a copy of analyst_result with only the user-selected items."""
+    result = dict(analyst_result)
+    for key in ("insights", "viral_angles", "content_hooks"):
+        if key in selection:
+            indices = set(selection[key])
+            original = analyst_result.get(key, [])
+            result[key] = [original[i] for i in sorted(indices) if i < len(original)]
+    return result
+
 
 async def _probe_models(api_key: str) -> str | None:
     """Return the first Gemini model that answers generateContent with HTTP 200."""
@@ -430,6 +444,20 @@ async def stream_analyst(run_id: str):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+class InsightSelection(BaseModel):
+    insights: list[int] = []
+    viral_angles: list[int] = []
+    content_hooks: list[int] = []
+
+
+@app.put("/api/runs/{run_id}/selection")
+async def save_insight_selection(run_id: str, body: InsightSelection):
+    if not get_run(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    _run_selections[run_id] = body.model_dump()
+    return {"ok": True}
+
+
 @app.get("/api/runs/{run_id}/agents/writer/stream")
 async def stream_writer(run_id: str):
     run = get_run(run_id)
@@ -442,6 +470,11 @@ async def stream_writer(run_id: str):
 
     if not scout_result or not analyst_result:
         raise HTTPException(status_code=400, detail="Scout and Analyst must run before Writer")
+
+    # Apply insight selection if the user chose specific items
+    selection = _run_selections.get(run_id)
+    if selection:
+        analyst_result = _apply_insight_selection(analyst_result, selection)
 
     async def generate():
         update_agent_result(run_id, "writer", "running")

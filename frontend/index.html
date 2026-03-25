@@ -210,6 +210,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .score-num{font-size:24px;font-weight:700;color:var(--accent)}
 .score-label{font-size:12px;color:var(--muted)}
 
+/* Insight selection */
+.selectable{cursor:pointer;transition:opacity .15s,border-color .15s}
+.selectable.unselected{opacity:.35}
+.insight-card.selected,.hook-item.selected{border-color:var(--accent)}
+.viral-card.selected{border-left-color:var(--accent);border:1px solid rgba(59,130,246,.3);border-left:3px solid var(--accent)}
+.selection-bar{display:none;position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--border);padding:10px 14px;margin-top:14px;align-items:center;justify-content:space-between;gap:10px;z-index:10}
+.selection-bar.visible{display:flex}
+.sel-count{font-size:13px;color:var(--muted)}.sel-count strong{color:var(--text)}
+
 /* Draft / Final tabs (writer/optimizer content) */
 .format-tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
 .format-tab{padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border);color:var(--muted);transition:all .15s}
@@ -487,6 +496,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
             <p>Ejecuta el Analyst Agent para ver los insights estratégicos aquí.</p>
           </div>
           <div id="insights-content" style="display:none"></div>
+          <div id="insights-selection-bar" class="selection-bar">
+            <span id="sel-count-label" class="sel-count"><strong>0</strong> seleccionados</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-ghost btn-sm" onclick="selectAllInsights(true)">Todo</button>
+              <button class="btn btn-ghost btn-sm" onclick="selectAllInsights(false)">Ninguno</button>
+              <button class="btn btn-primary btn-sm" id="write-selection-btn" onclick="writeWithSelection()">✍️ Escribir con seleccionados</button>
+            </div>
+          </div>
         </div>
 
         <!-- Draft tab -->
@@ -532,6 +549,8 @@ let agentResults = { scout: null, analyst: null, writer: null, optimizer: null }
 let logs = [];
 let isPipelineRunning = false;
 let isAgentRunning = false;
+let _lastAnalystResult = null;
+let insightSel = { insights: new Set(), viral_angles: new Set(), content_hooks: new Set() };
 
 // ─── Radio/Checkbox UI ─────────────────────────────────────────────────────
 document.querySelectorAll('.radio-group').forEach(group => {
@@ -891,28 +910,36 @@ function renderInsights(r) {
     document.getElementById('insights-content').style.display = 'block';
     return;
   }
+
+  _lastAnalystResult = r;
+  insightSel = {
+    insights: new Set((r.insights || []).map((_, i) => i)),
+    viral_angles: new Set((r.viral_angles || []).map((_, i) => i)),
+    content_hooks: new Set((r.content_hooks || []).map((_, i) => i)),
+  };
+
   document.getElementById('empty-insights').style.display = 'none';
   const el = document.getElementById('insights-content');
   el.style.display = 'block';
 
-  const insights = (r.insights || []).map(i => `
-    <div class="insight-card">
+  const insights = (r.insights || []).map((i, idx) => `
+    <div class="insight-card selectable selected" data-sel-type="insights" data-sel-idx="${idx}" onclick="toggleInsightItem('insights',${idx})">
       <h4>${escHtml(i.insight || i)}</h4>
       ${i.evidence ? `<div class="evidence">📎 ${escHtml(i.evidence)}</div>` : ''}
       ${i.implication ? `<div class="implication">→ ${escHtml(i.implication)}</div>` : ''}
     </div>`).join('');
 
-  const virals = (r.viral_angles || []).map(v => `
-    <div class="viral-card">
+  const virals = (r.viral_angles || []).map((v, idx) => `
+    <div class="viral-card selectable selected" data-sel-type="viral_angles" data-sel-idx="${idx}" onclick="toggleInsightItem('viral_angles',${idx})">
       <h4>${escHtml(v.angle || v)}</h4>
       ${v.why_viral ? `<div class="why">${escHtml(v.why_viral)}</div>` : ''}
       ${v.best_formats ? `<div style="margin-top:5px">${(v.best_formats||[]).map(f=>`<span class="keyword">${escHtml(f)}</span>`).join(' ')}</div>` : ''}
     </div>`).join('');
 
-  const hooks = (r.content_hooks || []).map(h => `
-    <div class="hook-item">
+  const hooks = (r.content_hooks || []).map((h, idx) => `
+    <div class="hook-item selectable selected" data-sel-type="content_hooks" data-sel-idx="${idx}" onclick="toggleInsightItem('content_hooks',${idx})">
       ${escHtml(h)}
-      <button class="btn btn-ghost btn-sm copy-hook" onclick="navigator.clipboard.writeText(${JSON.stringify(h)});showToast('Hook copiado','success')">📋</button>
+      <button class="btn btn-ghost btn-sm copy-hook" onclick="event.stopPropagation();navigator.clipboard.writeText(${JSON.stringify(h)});showToast('Hook copiado','success')">📋</button>
     </div>`).join('');
 
   const pos = r.positioning || {};
@@ -920,6 +947,7 @@ function renderInsights(r) {
 
   el.innerHTML = `
     ${r.executive_summary ? `<div class="research-card" style="margin-bottom:14px"><h4>Executive Summary</h4><p>${escHtml(r.executive_summary)}</p></div>` : ''}
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Haz clic en cualquier insight, ángulo viral o hook para incluirlo o excluirlo del contenido.</div>
     <div class="research-grid">
       <div>
         <div class="section-title" style="margin-bottom:10px">💡 Insights Accionables</div>
@@ -944,7 +972,69 @@ function renderInsights(r) {
       </div>
     </div>
   `;
+  updateInsightSelBar();
   switchTab('insights');
+}
+
+function toggleInsightItem(type, idx) {
+  if (insightSel[type].has(idx)) {
+    insightSel[type].delete(idx);
+  } else {
+    insightSel[type].add(idx);
+  }
+  const el = document.querySelector(`[data-sel-type="${type}"][data-sel-idx="${idx}"]`);
+  if (el) {
+    el.classList.toggle('selected', insightSel[type].has(idx));
+    el.classList.toggle('unselected', !insightSel[type].has(idx));
+  }
+  updateInsightSelBar();
+}
+
+function selectAllInsights(select) {
+  if (!_lastAnalystResult) return;
+  ['insights', 'viral_angles', 'content_hooks'].forEach(type => {
+    insightSel[type].clear();
+    if (select) {
+      (_lastAnalystResult[type] || []).forEach((_, i) => insightSel[type].add(i));
+    }
+    document.querySelectorAll(`[data-sel-type="${type}"]`).forEach(el => {
+      const idx = parseInt(el.dataset.selIdx);
+      el.classList.toggle('selected', insightSel[type].has(idx));
+      el.classList.toggle('unselected', !insightSel[type].has(idx));
+    });
+  });
+  updateInsightSelBar();
+}
+
+function updateInsightSelBar() {
+  const total = insightSel.insights.size + insightSel.viral_angles.size + insightSel.content_hooks.size;
+  const bar = document.getElementById('insights-selection-bar');
+  if (bar) bar.classList.add('visible');
+  const label = document.getElementById('sel-count-label');
+  if (label) label.innerHTML = `<strong>${total}</strong> seleccionados`;
+  const btn = document.getElementById('write-selection-btn');
+  if (btn) btn.disabled = total === 0;
+}
+
+async function writeWithSelection() {
+  if (!currentRunId) { showToast('Ejecuta el Analyst primero', 'error'); return; }
+  const selection = {
+    insights: [...insightSel.insights],
+    viral_angles: [...insightSel.viral_angles],
+    content_hooks: [...insightSel.content_hooks],
+  };
+  try {
+    const res = await fetch(`/api/runs/${currentRunId}/selection`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(selection),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } catch(e) {
+    showToast('Error guardando selección', 'error');
+    return;
+  }
+  await runAgent('writer');
 }
 
 function renderDraft(r) {
