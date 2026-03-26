@@ -386,20 +386,22 @@ body.light .topbar-brand-sub{color:var(--accent)}
 .page-view-sub{font-size:11px;color:var(--muted);letter-spacing:.08em;font-family:'Oswald',sans-serif;text-transform:uppercase}
 
 /* ─── Home Page Layout ──────────────────────────────────────────────────── */
+/* Panel mode defaults: hide home-only elements */
+#home-hero,#home-run-wrap{display:none}
+/* Home mode: show everything, centered */
 #app-wrap.page-home #agents-row{display:none}
 #app-wrap.page-home #workspace{display:none}
 #app-wrap.page-home #main{background:var(--bg);overflow-y:auto}
 #app-wrap.page-home #sidebar{
   width:100%;max-width:100%;border-right:none;background:transparent;
   display:flex;flex-direction:column;align-items:center;
-  gap:0;padding:32px 16px 48px;overflow-y:auto;
+  padding:32px 16px 48px;overflow-y:auto;
 }
-#app-wrap.page-home #sidebar>*{display:none}
-#app-wrap.page-home #sidebar>#home-hero,
-#app-wrap.page-home #sidebar>#section-topic,
-#app-wrap.page-home #sidebar>#section-formats,
-#app-wrap.page-home #sidebar>#advanced-settings,
-#app-wrap.page-home #sidebar>#home-run-wrap{display:block;width:100%;max-width:560px}
+#app-wrap.page-home #sidebar>*{
+  width:100%;max-width:560px;
+}
+#app-wrap.page-home #home-hero,
+#app-wrap.page-home #home-run-wrap{display:block}
 
 .home-hero{display:flex;flex-direction:column;align-items:center;padding:8px 0 28px;gap:14px}
 .home-hero-logo{
@@ -1565,13 +1567,27 @@ async function writeWithSelection() {
   _selectionConfirmed = true;
   isAgentRunning = true;
   setBusy(true);
+
+  // Show loading screen with scout+analyst already completed
+  showLoadingScreen();
+  ['lpill-scout','lpill-analyst'].forEach(id => {
+    const p = document.getElementById(id);
+    if (p) { p.classList.remove('active'); p.classList.add('done'); }
+  });
+  setLoadingProgress(55, 'Research completado. Iniciando escritura...');
+
   try {
     await streamAgent(currentRunId, 'writer');
     await streamAgent(currentRunId, 'optimizer');
+    setLoadingProgress(100, 'Contenido generado ✓');
+    await new Promise(r => setTimeout(r, 800));
+    hideLoadingScreen();
     enableExports();
     showToast('Contenido generado y optimizado ✓', 'success');
     addLog('info', 'Writing + Optimization completados');
+    snavGo('draft');
   } catch(e) {
+    hideLoadingScreen();
     // error shown inside streamAgent
   }
   isAgentRunning = false;
