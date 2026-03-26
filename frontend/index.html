@@ -44,11 +44,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .theme-divider{width:1px;height:20px;background:var(--border);margin:0 4px}
 .btn-theme-toggle{
   display:inline-flex;align-items:center;justify-content:center;
-  width:32px;height:32px;border-radius:0;border:1px solid var(--border);
-  background:transparent;color:var(--light);cursor:pointer;
-  font-size:16px;transition:all .15s;flex-shrink:0;
+  width:32px;height:32px;border-radius:10px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
+  color:var(--light);cursor:pointer;
+  font-size:15px;transition:all .15s;flex-shrink:0;
+  box-shadow:0 2px 10px rgba(0,0,0,0.2);
 }
-.btn-theme-toggle:hover{border-color:var(--accent);color:var(--text)}
+.btn-theme-toggle:hover{background:rgba(255,255,255,0.14);border-color:rgba(204,0,0,0.5);color:var(--text)}
 
 /* ─── Light mode specific overrides ────────────────────────────────────── */
 body.light #sidenav{background:#ffffff;border-right-color:#e0e0e0}
@@ -80,8 +83,13 @@ body.light .radio-group label,
 body.light .check-group label{background:#ffffff;border-color:#d0d0d0;color:#444}
 body.light .radio-group label.active,
 body.light .check-group label.active{background:rgba(204,0,0,.06);border-color:var(--accent);color:#cc0000}
-body.light .btn-ghost{border-color:#d0d0d0;color:#666}
-body.light .btn-ghost:hover{border-color:var(--accent);color:#111}
+body.light .btn{background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.1);color:#444;box-shadow:0 2px 10px rgba(0,0,0,0.08)}
+body.light .btn:hover{background:rgba(0,0,0,0.08);border-color:rgba(204,0,0,0.4);color:#111}
+body.light .btn-ghost{background:rgba(0,0,0,0.03);border-color:rgba(0,0,0,0.08);color:#888}
+body.light .btn-ghost:hover{background:rgba(0,0,0,0.07);border-color:rgba(204,0,0,0.4);color:#111}
+body.light .btn-pipeline{background:rgba(204,0,0,0.15);border-color:rgba(204,0,0,0.35);color:#cc0000}
+body.light .btn-pipeline:hover{background:rgba(204,0,0,0.25);color:#aa0000}
+body.light .btn-theme-toggle{background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.1)}
 body.light .run-badge{border-color:#d0d0d0;color:#999}
 body.light .tabs{border-bottom-color:#e0e0e0}
 body.light .tab{color:#aaa}
@@ -224,8 +232,9 @@ body.light .topbar-brand-sub{color:var(--accent)}
 .radio-group,.check-group{display:flex;flex-wrap:wrap;gap:6px}
 .radio-group label,.check-group label{
   display:flex;align-items:center;gap:5px;cursor:pointer;
-  background:#0f0f0f;border:1px solid #1e1e1e;border-radius:0;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;
   padding:5px 10px;font-size:12px;transition:all .15s;user-select:none;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 .radio-group label:hover,.check-group label:hover{border-color:var(--accent)}
 .radio-group input,.check-group input{display:none}
@@ -251,26 +260,53 @@ body.light .topbar-brand-sub{color:var(--accent)}
 /* ─── Buttons ───────────────────────────────────────────────────────────── */
 .btn{
   display:inline-flex;align-items:center;gap:6px;padding:7px 14px;
-  border-radius:0;font-size:12px;font-weight:500;cursor:pointer;
-  border:none;font-family:'Oswald',sans-serif;letter-spacing:.06em;text-transform:uppercase;transition:all .15s;outline:none;
+  border-radius:10px;font-size:12px;font-weight:500;cursor:pointer;
+  font-family:'Oswald',sans-serif;letter-spacing:.06em;text-transform:uppercase;
+  transition:all .18s;outline:none;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 2px 14px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.07);
+  color:var(--text);
 }
-.btn-primary{background:var(--accent);color:#fff;border:1px solid var(--accent)}
-.btn-primary:hover{background:#aa0000;border-color:#aa0000}
+.btn:hover{
+  background:rgba(255,255,255,0.12);
+  border-color:rgba(255,255,255,0.2);
+  box-shadow:0 4px 20px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.btn-primary{
+  background:rgba(204,0,0,0.35);color:#fff;
+  border:1px solid rgba(204,0,0,0.55);
+  box-shadow:0 4px 18px rgba(204,0,0,0.25),inset 0 1px 0 rgba(255,80,80,0.2);
+}
+.btn-primary:hover{
+  background:rgba(204,0,0,0.55);
+  box-shadow:0 4px 24px rgba(204,0,0,0.4),inset 0 1px 0 rgba(255,80,80,0.25);
+}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed}
-.btn-ghost{background:transparent;border:1px solid #222;color:#666}
-.btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+.btn-ghost{
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#888;
+}
+.btn-ghost:hover{
+  background:rgba(255,255,255,0.10);border-color:rgba(204,0,0,0.5);color:var(--text);
+}
 .btn-ghost:disabled{opacity:.4;cursor:not-allowed}
 .btn-success{background:var(--success);color:#fff}
 .btn-sm{padding:4px 10px;font-size:12px}
 .btn-pipeline{
-  background:var(--accent);
-  color:#fff;padding:8px 18px;font-size:12px;font-weight:700;border-radius:0;
+  background:rgba(204,0,0,0.4);
+  color:#fff;padding:8px 18px;font-size:12px;font-weight:700;border-radius:10px;
   justify-content:center;letter-spacing:.14em;text-transform:uppercase;
-  border:1px solid var(--accent);font-family:'Oswald',sans-serif;
+  border:1px solid rgba(204,0,0,0.6);font-family:'Oswald',sans-serif;
   white-space:nowrap;
+  box-shadow:0 4px 20px rgba(204,0,0,0.3),inset 0 1px 0 rgba(255,100,100,0.25);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
 }
-.btn-pipeline:hover{background:#aa0000;border-color:#aa0000}
-.btn-pipeline:disabled{opacity:.3;cursor:not-allowed}
+.btn-pipeline:hover{
+  background:rgba(204,0,0,0.65);
+  box-shadow:0 6px 28px rgba(204,0,0,0.45),inset 0 1px 0 rgba(255,100,100,0.3);
+}
+.btn-pipeline:disabled{opacity:.3;cursor:not-allowed;box-shadow:none}
 
 /* ─── Agent Cards ───────────────────────────────────────────────────────── */
 .agent-card{
@@ -297,6 +333,57 @@ body.light .topbar-brand-sub{color:var(--accent)}
 .status-error{background:transparent;border:1px solid rgba(239,68,68,.4);color:var(--error)}
 
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ─── Agent Progress Bar ────────────────────────────────────────────────── */
+.agent-progress-bar{
+  height:3px;background:rgba(255,255,255,0.04);
+  flex-shrink:0;position:relative;overflow:hidden;display:none;align-items:center;
+}
+.agent-progress-bar.active{display:flex}
+.agent-progress-fill{
+  position:absolute;left:-40%;top:0;height:100%;width:40%;
+  background:linear-gradient(90deg,transparent,var(--accent),#ff4444,transparent);
+  animation:progressSweep 1.4s ease-in-out infinite;
+}
+.agent-progress-label{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  font-size:9px;font-family:'Oswald',sans-serif;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);z-index:1;
+  background:var(--bg);padding:0 6px;
+}
+@keyframes progressSweep{
+  0%{left:-40%}100%{left:100%}
+}
+
+/* ─── Sidenav Page Navigation ───────────────────────────────────────────── */
+/* Default: show sidebar + workspace side by side */
+#app-wrap #sidebar{display:block}
+#app-wrap #workspace{display:flex}
+
+/* Research/Insights/Draft/Final/Logs pages: hide config sidebar */
+#app-wrap.page-research #sidebar,
+#app-wrap.page-insights #sidebar,
+#app-wrap.page-draft #sidebar,
+#app-wrap.page-final #sidebar,
+#app-wrap.page-logs #sidebar{display:none}
+
+/* Config page: hide workspace tabs, show config panel full-width */
+#app-wrap.page-config #workspace{display:none}
+#app-wrap.page-config #sidebar{
+  width:100%;max-width:600px;margin:0 auto;border-right:none;padding:24px 32px;
+}
+#app-wrap.page-config #main{justify-content:center;background:var(--bg)}
+
+/* Page headers inside results */
+.page-view-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 16px 10px;flex-shrink:0;
+}
+.page-view-title{
+  font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--text);
+}
+.page-view-sub{font-size:11px;color:var(--muted);letter-spacing:.08em;font-family:'Oswald',sans-serif;text-transform:uppercase}
 
 .agent-controls{display:flex;gap:6px;align-items:center}
 .agent-preview{
@@ -377,8 +464,18 @@ body.light .topbar-brand-sub{color:var(--accent)}
 
 /* Draft / Final tabs (writer/optimizer content) */
 .format-tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
-.format-tab{padding:4px 12px;border-radius:0;font-size:11px;cursor:pointer;border:1px solid #1e1e1e;color:#444;transition:all .15s;font-family:'Oswald',sans-serif;letter-spacing:.08em;text-transform:uppercase}
-.format-tab.active{background:transparent;color:var(--text);border-color:var(--accent)}
+.format-tab{
+  padding:4px 14px;border-radius:8px;font-size:11px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);color:#555;transition:all .15s;
+  font-family:'Oswald',sans-serif;letter-spacing:.08em;text-transform:uppercase;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  background:rgba(255,255,255,0.04);
+}
+.format-tab.active{
+  background:rgba(204,0,0,0.18);color:var(--text);
+  border-color:rgba(204,0,0,0.5);
+  box-shadow:0 0 12px rgba(204,0,0,0.15);
+}
 .format-panel{display:none}
 .format-panel.active{display:block}
 .content-block{background:#0f0f0f;border:1px solid #1a1a1a;border-radius:0;padding:14px;margin-bottom:8px;border-top:2px solid #222}
@@ -489,6 +586,12 @@ body.light .topbar-brand-sub{color:var(--accent)}
     </button>
   </div>
 </header>
+
+<!-- ───────────────── PROGRESS BAR ──────────────────────────────────── -->
+<div id="agent-progress" class="agent-progress-bar">
+  <div id="agent-progress-fill" class="agent-progress-fill"></div>
+  <span id="agent-progress-label" class="agent-progress-label"></span>
+</div>
 
 <!-- ───────────────── MAIN LAYOUT ────────────────────────────────────── -->
 <div id="main">
@@ -649,13 +752,19 @@ body.light .topbar-brand-sub{color:var(--accent)}
 
     <!-- Results Area -->
     <div id="results-area">
+      <div class="page-view-header">
+        <div>
+          <div class="page-view-title" id="page-view-title">Research</div>
+          <div class="page-view-sub" id="page-view-sub">Scout · Trend Intelligence</div>
+        </div>
+      </div>
       <div class="results-header">
         <div class="tabs">
-          <div class="tab active" onclick="switchTab('research')">📊 Research</div>
-          <div class="tab" onclick="switchTab('insights')">💡 Insights</div>
-          <div class="tab" onclick="switchTab('draft')">✍️ Draft</div>
-          <div class="tab" onclick="switchTab('final')">🚀 Final</div>
-          <div class="tab" onclick="switchTab('logs')">📋 Logs</div>
+          <div class="tab active" onclick="switchTab('research')">Research</div>
+          <div class="tab" onclick="switchTab('insights')">Insights</div>
+          <div class="tab" onclick="switchTab('draft')">Draft</div>
+          <div class="tab" onclick="switchTab('final')">Final</div>
+          <div class="tab" onclick="switchTab('logs')">Logs</div>
         </div>
       </div>
 
@@ -944,6 +1053,16 @@ function setAgentStatus(agent, status) {
   card.className = `agent-card ${status}`;
   badge.className = `status-badge status-${status}`;
   badge.textContent = status.toUpperCase();
+  // Progress bar
+  const labels = {scout:'Scout',analyst:'Analyst',writer:'Writer',optimizer:'Optimizer'};
+  if (status === 'running') showProgress(labels[agent] || agent);
+  else if (status === 'done' || status === 'error') {
+    // Hide only if no other agent is running
+    const anyRunning = ['scout','analyst','writer','optimizer'].some(a =>
+      document.getElementById(`badge-${a}`)?.textContent === 'RUNNING'
+    );
+    if (!anyRunning) hideProgress();
+  }
 }
 
 function updateAgentPreview(agent, text) {
@@ -955,14 +1074,25 @@ function updateAgentPreview(agent, text) {
   el.className = 'agent-preview streaming';
 }
 
-// ── Side Nav ──────────────────────────────────────────────────────────────
+// ── Progress Bar ──────────────────────────────────────────────────────────
+function showProgress(agentLabel) {
+  const bar = document.getElementById('agent-progress');
+  const label = document.getElementById('agent-progress-label');
+  if (!bar) return;
+  bar.classList.add('active');
+  if (label) label.textContent = `${agentLabel} working...`;
+}
+function hideProgress() {
+  const bar = document.getElementById('agent-progress');
+  if (bar) bar.classList.remove('active');
+}
+
 // ── Theme Toggle ──────────────────────────────────────────────────────────
 function toggleTheme() {
   const isLight = document.body.classList.toggle('light');
   document.getElementById('theme-icon').textContent = isLight ? '☀' : '☽';
   localStorage.setItem('theme', isLight ? 'light' : 'dark');
 }
-// Apply saved theme on load
 (function(){
   if (localStorage.getItem('theme') === 'light') {
     document.body.classList.add('light');
@@ -971,21 +1101,51 @@ function toggleTheme() {
   }
 })();
 
+// ── Side Nav Page Navigation ───────────────────────────────────────────────
+const PAGE_TITLES = {
+  research: ['Research', 'Scout · Trend Intelligence'],
+  insights: ['Insights', 'Analyst · Strategic Analysis'],
+  draft: ['Draft', 'Writer · Content Production'],
+  final: ['Final', 'Optimizer · Growth Ready'],
+  logs: ['Logs', 'System · Agent Activity'],
+  config: ['Configuration', 'Pipeline · Settings']
+};
+
 function snavGo(tabName) {
-  // Update sidenav active item
+  const wrap = document.getElementById('app-wrap');
+  // Remove all page classes
+  wrap.className = wrap.className.replace(/\bpage-\w+\b/g, '').trim();
+  wrap.classList.add(`page-${tabName}`);
+  // Update sidenav active
   document.querySelectorAll('.snav-item[id^="snav-"]').forEach(el => el.classList.remove('active'));
-  const navEl = document.getElementById(`snav-${tabName}`);
-  if (navEl) navEl.classList.add('active');
+  document.getElementById(`snav-${tabName}`)?.classList.add('active');
   document.getElementById('snav-config')?.classList.remove('active');
-  // Ensure sidebar is expanded when navigating to content
+  // Switch tab content
   switchTab(tabName);
+  // Update page view title
+  const titles = PAGE_TITLES[tabName] || [tabName, ''];
+  const titleEl = document.getElementById('page-view-title');
+  const subEl = document.getElementById('page-view-sub');
+  if (titleEl) titleEl.textContent = titles[0];
+  if (subEl) subEl.textContent = titles[1];
 }
 
 function snavToggleConfig() {
-  const sidebar = document.getElementById('sidebar');
-  const btn = document.getElementById('snav-config');
-  const collapsed = sidebar.classList.toggle('collapsed');
-  btn.classList.toggle('active', !collapsed);
+  const wrap = document.getElementById('app-wrap');
+  const isConfig = wrap.classList.contains('page-config');
+  if (isConfig) {
+    // Go back to research
+    snavGo('research');
+  } else {
+    wrap.className = wrap.className.replace(/\bpage-\w+\b/g, '').trim();
+    wrap.classList.add('page-config');
+    document.querySelectorAll('.snav-item[id^="snav-"]').forEach(el => el.classList.remove('active'));
+    document.getElementById('snav-config')?.classList.add('active');
+    const titleEl = document.getElementById('page-view-title');
+    const subEl = document.getElementById('page-view-sub');
+    if (titleEl) titleEl.textContent = 'Configuration';
+    if (subEl) subEl.textContent = 'Pipeline · Settings';
+  }
 }
 
 function switchTab(name) {
