@@ -8,7 +8,9 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-RUNS_DIR = Path(__file__).parent.parent / "data" / "runs"
+# Use /tmp on Vercel (read-only FS except /tmp); fall back to local data/ otherwise.
+_default_runs_dir = Path("/tmp/runs") if os.path.exists("/tmp") else Path(__file__).parent.parent / "data" / "runs"
+RUNS_DIR = Path(os.getenv("RUNS_DIR", str(_default_runs_dir)))
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
 
