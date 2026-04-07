@@ -422,11 +422,13 @@ body.light .home-hero-logo{filter:none;border-color:#ddd;box-shadow:0 4px 20px r
 #app-wrap.page-home #cg-formats{gap:8px}
 #app-wrap.page-home #cg-formats label{font-size:13px;padding:7px 14px;border-radius:10px}
 
-.advanced-section{margin-bottom:16px;border:1px solid rgba(255,255,255,.07);border-radius:12px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.03);overflow:hidden}
-.advanced-summary{list-style:none;padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--light);user-select:none;transition:color .15s}
+.advanced-section{margin-bottom:16px;border:1px solid rgba(255,255,255,.07);border-radius:12px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.03);overflow:hidden;display:block}
+.advanced-summary{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--light);user-select:none;transition:color .15s}
 .advanced-summary:hover{color:var(--text)}
-.advanced-summary::-webkit-details-marker{display:none}
-details[open] .advanced-arrow{transform:rotate(180deg)}
+.advanced-arrow{transition:transform .2s;display:inline-block;font-size:10px;color:var(--accent)}
+.advanced-arrow.open{transform:rotate(180deg)}
+.advanced-body{display:none;padding:0 16px 16px}
+.advanced-body.open{display:block}
 .advanced-arrow{transition:transform .2s;display:inline-block;font-size:10px;color:var(--accent)}
 .advanced-body{padding:0 16px 16px;display:flex;flex-direction:column;gap:0}
 .advanced-body .section{margin-bottom:14px}
@@ -702,12 +704,12 @@ body.light .loading-logo-base{filter:none}
     </div>
 
     <!-- ADVANCED SETTINGS (collapsible) -->
-    <details class="advanced-section" id="advanced-settings">
-      <summary class="advanced-summary">
+    <div class="advanced-section" id="advanced-settings">
+      <div class="advanced-summary" onclick="toggleAdvanced()">
         <span>⚙ Configuración avanzada</span>
-        <span class="advanced-arrow">▼</span>
-      </summary>
-      <div class="advanced-body">
+        <span class="advanced-arrow" id="advanced-arrow">▼</span>
+      </div>
+      <div class="advanced-body" id="advanced-body">
 
         <div class="section">
           <div class="section-title">Categoría</div>
@@ -786,7 +788,7 @@ body.light .loading-logo-base{filter:none}
         </div>
 
       </div>
-    </details>
+    </div>
 
     <!-- HOME RUN BUTTON (only shown in page-home mode) -->
     <div class="home-run-wrap" id="home-run-wrap">
@@ -1264,6 +1266,15 @@ function showProgress(agentLabel) {
 function hideProgress() {
   const bar = document.getElementById('agent-progress');
   if (bar) bar.classList.remove('active');
+}
+
+// ── Advanced Settings Toggle ───────────────────────────────────────────────
+function toggleAdvanced() {
+  const body = document.getElementById('advanced-body');
+  const arrow = document.getElementById('advanced-arrow');
+  if (!body) return;
+  const isOpen = body.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open', isOpen);
 }
 
 // ── Theme Toggle ──────────────────────────────────────────────────────────
