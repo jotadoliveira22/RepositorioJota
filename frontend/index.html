@@ -703,12 +703,12 @@ body.light .loading-logo-base{filter:none}
     </div>
 
     <!-- ADVANCED SETTINGS (collapsible) -->
-    <div class="advanced-section" id="advanced-settings">
-      <div class="advanced-summary" onclick="toggleAdvanced()">
+    <div id="advanced-settings" style="display:block!important;background:#111111;border:1px solid #333333;border-radius:12px;margin-bottom:16px;width:100%;box-sizing:border-box;flex-shrink:0">
+      <div onclick="toggleAdvanced()" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#aaaaaa;user-select:none">
         <span>⚙ Configuración avanzada</span>
-        <span class="advanced-arrow" id="advanced-arrow">▼</span>
+        <span id="advanced-arrow" style="color:#cc0000;transition:transform .25s;display:inline-block">▼</span>
       </div>
-      <div class="advanced-body" id="advanced-body">
+      <div id="advanced-body" style="display:none;padding:0 16px 16px">
 
         <div class="section">
           <div class="section-title">Categoría</div>
@@ -1272,8 +1272,9 @@ function toggleAdvanced() {
   const body = document.getElementById('advanced-body');
   const arrow = document.getElementById('advanced-arrow');
   if (!body) return;
-  const isOpen = body.classList.toggle('open');
-  if (arrow) arrow.classList.toggle('open', isOpen);
+  const isOpen = body.style.display === 'none' || body.style.display === '';
+  body.style.display = isOpen ? 'block' : 'none';
+  if (arrow) arrow.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
 }
 
 // ── Theme Toggle ──────────────────────────────────────────────────────────
