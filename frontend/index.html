@@ -402,6 +402,7 @@ body.light .topbar-brand-sub{color:var(--accent)}
 }
 #app-wrap.page-home #home-hero,
 #app-wrap.page-home #home-run-wrap{display:block}
+#app-wrap.page-home #advanced-settings{display:block !important;min-height:44px}
 
 .home-hero{display:flex;flex-direction:column;align-items:center;padding:8px 0 28px;gap:14px}
 .home-hero-logo{
@@ -422,18 +423,16 @@ body.light .home-hero-logo{filter:none;border-color:#ddd;box-shadow:0 4px 20px r
 #app-wrap.page-home #cg-formats{gap:8px}
 #app-wrap.page-home #cg-formats label{font-size:13px;padding:7px 14px;border-radius:10px}
 
-.advanced-section{margin-bottom:16px;border:1px solid rgba(255,255,255,.07);border-radius:12px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.03);overflow:hidden;display:block}
-.advanced-summary{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--light);user-select:none;transition:color .15s}
+.advanced-section{margin-bottom:16px;border:1px solid #2a2a2a;border-radius:12px;background:#111111;flex-shrink:0}
+.advanced-summary{padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#aaaaaa;user-select:none;transition:color .15s}
 .advanced-summary:hover{color:var(--text)}
-.advanced-arrow{transition:transform .2s;display:inline-block;font-size:10px;color:var(--accent)}
+.advanced-arrow{transition:transform .25s;display:inline-block;font-size:10px;color:var(--accent)}
 .advanced-arrow.open{transform:rotate(180deg)}
-.advanced-body{display:none;padding:0 16px 16px}
-.advanced-body.open{display:block}
-.advanced-arrow{transition:transform .2s;display:inline-block;font-size:10px;color:var(--accent)}
-.advanced-body{padding:0 16px 16px;display:flex;flex-direction:column;gap:0}
+.advanced-body{display:none;padding:0 16px 16px;flex-direction:column;gap:0}
+.advanced-body.open{display:flex}
 .advanced-body .section{margin-bottom:14px}
 .advanced-body .section:last-child{margin-bottom:0}
-body.light .advanced-section{border-color:rgba(0,0,0,.08);background:rgba(0,0,0,.02)}
+body.light .advanced-section{border-color:#e0e0e0;background:#fafafa}
 
 .home-run-wrap{display:none;padding:8px 0 0}
 #app-wrap.page-home .home-run-wrap{display:block}
