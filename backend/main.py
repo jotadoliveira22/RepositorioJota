@@ -137,6 +137,12 @@ async def _probe_models(api_key: str) -> str | None:
                             return None
                     except Exception:
                         pass
+                # 503/502/500 = transient server error — reset working model cache and retry same
+                if resp.status_code in (500, 502, 503, 504):
+                    print(f"[Gemini probe] {model} → {resp.status_code} transient, retrying after 3s", flush=True)
+                    await asyncio.sleep(3)
+                    # Don't advance to next model — retry same one
+                    continue
                 # 403 = model-specific restriction (not a bad key), 404 = model not found,
                 # 429 = rate limited — continue trying the next model
                 print(f"[Gemini probe] {model} → {resp.status_code}, trying next model", flush=True)
@@ -219,6 +225,17 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             await asyncio.sleep(wait_time)
                             continue
                         yield ("error", f"Rate limit tras 3 intentos: {err_msg}")
+                        return
+                    if response.status_code in (500, 502, 503, 504):
+                        body = await response.aread()
+                        print(f"[Gemini {response.status_code}] intento={attempt} {body[:200]}", flush=True)
+                        if attempt < 3:
+                            wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s
+                            print(f"[Gemini {response.status_code}] esperando {wait_time}s antes de reintentar...", flush=True)
+                            _working_model = None  # reset cache — probe again next request
+                            await asyncio.sleep(wait_time)
+                            continue
+                        yield ("error", "El servicio de Gemini no está disponible (503). Espera 1-2 minutos e intenta de nuevo.")
                         return
                     if response.status_code != 200:
                         body = await response.aread()
