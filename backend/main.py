@@ -69,10 +69,86 @@ class ValidateUrlsRequest(BaseModel):
 # Helper: Claude streaming call
 # ---------------------------------------------------------------------------
 
-GEMINI_URL = (
+# Models tried in order until one responds with HTTP 200
+GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro",
+]
+
+GEMINI_URL_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:streamGenerateContent?alt=sse&key={key}"
+    "{model}:streamGenerateContent?alt=sse&key={key}"
 )
+
+# Cache the first working model so we don't probe on every request
+_working_model: str | None = None
+
+# In-memory store of per-run insight selections (persists for the server lifetime)
+_run_selections: dict = {}
+
+
+def _apply_insight_selection(analyst_result: dict, selection: dict) -> dict:
+    """Return a copy of analyst_result with only the user-selected items."""
+    result = dict(analyst_result)
+    for key in ("insights", "viral_angles", "content_hooks"):
+        if key in selection:
+            indices = set(selection[key])
+            original = analyst_result.get(key, [])
+            result[key] = [original[i] for i in sorted(indices) if i < len(original)]
+    return result
+
+
+async def _probe_models(api_key: str) -> str | None:
+    """Return the first Gemini model that answers generateContent with HTTP 200."""
+    global _working_model
+    if _working_model:
+        return _working_model
+    probe_payload = {
+        "contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+        "generationConfig": {"maxOutputTokens": 1},
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        for model in GEMINI_MODELS:
+            url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent?key={api_key}"
+            )
+            try:
+                resp = await client.post(url, json=probe_payload)
+                print(f"[Gemini probe] {model} → {resp.status_code}", flush=True)
+                if resp.status_code == 200:
+                    _working_model = model
+                    return model
+                if resp.status_code == 401:
+                    # Key is definitively invalid
+                    print("[Gemini probe] 401 — API key invalid, aborting probe", flush=True)
+                    return None
+                if resp.status_code == 400:
+                    # Google returns 400 for invalid API keys
+                    try:
+                        err_text = resp.text.lower()
+                        if "api key not valid" in err_text or "api_key_invalid" in err_text:
+                            print("[Gemini probe] 400 — API key not valid, aborting probe", flush=True)
+                            return None
+                    except Exception:
+                        pass
+                # 503/502/500 = transient server error — reset working model cache and retry same
+                if resp.status_code in (500, 502, 503, 504):
+                    print(f"[Gemini probe] {model} → {resp.status_code} transient, retrying after 3s", flush=True)
+                    await asyncio.sleep(3)
+                    # Don't advance to next model — retry same one
+                    continue
+                # 403 = model-specific restriction (not a bad key), 404 = model not found,
+                # 429 = rate limited — continue trying the next model
+                print(f"[Gemini probe] {model} → {resp.status_code}, trying next model", flush=True)
+            except Exception as exc:
+                print(f"[Gemini probe] {model} → exception: {exc}", flush=True)
+    return None
 
 
 async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[str, str]]:
@@ -81,19 +157,28 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
       - ("text", "...") for streaming text chunks
       - ("done", json_string) when finished
       - ("error", message) on error
-    Uses Google Gemini REST API via httpx.
-    Retries up to 3 times on rate limit (429) with 15s backoff.
+    Auto-detects the best available Gemini model and retries on rate limit (429).
     """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         yield ("error", "GEMINI_API_KEY not set in environment")
         return
 
-    url = GEMINI_URL.format(key=api_key)
+    model = await _probe_models(api_key)
+    if not model:
+        yield ("error", (
+            "No se encontró ningún modelo Gemini disponible para esta API key. "
+            "Verifica que la clave sea válida en aistudio.google.com y que tenga "
+            "acceso a la API de Gemini."
+        ))
+        return
+
+    print(f"[Gemini] Usando modelo: {model}", flush=True)
+    url = GEMINI_URL_TEMPLATE.format(model=model, key=api_key)
     payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
-        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.7},
+        "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7},
     }
 
     for attempt in range(4):
@@ -102,9 +187,13 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
             async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", url, json=payload) as response:
                     if response.status_code == 400:
+                        body = await response.aread()
+                        print(f"[Gemini 400] {body[:300]}", flush=True)
                         yield ("error", "Solicitud inválida a la API de Gemini.")
                         return
                     if response.status_code in (401, 403):
+                        body = await response.aread()
+                        print(f"[Gemini {response.status_code}] {body[:300]}", flush=True)
                         yield ("error", "API key inválida. Revisa GEMINI_API_KEY.")
                         return
                     if response.status_code == 429:
@@ -117,7 +206,6 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             err_msg = body.decode(errors="replace") if isinstance(body, bytes) else str(body)
                         print(f"[Gemini 429] intento={attempt} mensaje={err_msg!r}", flush=True)
 
-                        # Parse suggested retry time from the error message (e.g. "retry in 40.7s")
                         retry_match = re.search(r'retry in ([\d.]+)s', err_msg, re.IGNORECASE)
                         suggested_wait = float(retry_match.group(1)) if retry_match else None
 
@@ -127,7 +215,6 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             "quota_exceeded", "resource_exhausted",
                             "per day", "daily",
                         ))
-                        # If the API gives a short retry window (<= 2 min) it's a rate limit, not hard quota
                         is_retryable_rate_limit = suggested_wait is not None and suggested_wait <= 120
                         if is_quota and not is_retryable_rate_limit and attempt == 0:
                             yield ("error", f"Cuota agotada: {err_msg}. Revisa tu plan en aistudio.google.com.")
@@ -139,7 +226,20 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
                             continue
                         yield ("error", f"Rate limit tras 3 intentos: {err_msg}")
                         return
+                    if response.status_code in (500, 502, 503, 504):
+                        body = await response.aread()
+                        print(f"[Gemini {response.status_code}] intento={attempt} {body[:200]}", flush=True)
+                        if attempt < 3:
+                            wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s
+                            print(f"[Gemini {response.status_code}] esperando {wait_time}s antes de reintentar...", flush=True)
+                            _working_model = None  # reset cache — probe again next request
+                            await asyncio.sleep(wait_time)
+                            continue
+                        yield ("error", "El servicio de Gemini no está disponible (503). Espera 1-2 minutos e intenta de nuevo.")
+                        return
                     if response.status_code != 200:
+                        body = await response.aread()
+                        print(f"[Gemini {response.status_code}] {body[:300]}", flush=True)
                         yield ("error", f"Error de API Gemini: HTTP {response.status_code}")
                         return
 
@@ -174,8 +274,50 @@ async def call_claude_stream(system: str, user_msg: str) -> AsyncIterator[tuple[
             return
 
 
+def _extract_complete_formats(text: str) -> dict:
+    """
+    Extract every top-level format key whose JSON object is complete
+    (matching braces) from a potentially truncated JSON string.
+    """
+    KNOWN_FORMATS = ["reel", "tiktok", "x_twitter", "carousel",
+                     "linkedin", "newsletter", "ads"]
+    result: dict = {}
+    for fmt in KNOWN_FORMATS:
+        import re as _re
+        m = _re.search(rf'"{_re.escape(fmt)}"\s*:\s*(\{{)', text)
+        if not m:
+            continue
+        start = m.start(1)
+        depth = 0
+        in_str = False
+        esc = False
+        for i, ch in enumerate(text[start:], start):
+            if esc:
+                esc = False
+                continue
+            if ch == "\\" and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+            if not in_str:
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            result[fmt] = json.loads(text[start: i + 1])
+                        except json.JSONDecodeError:
+                            pass
+                        break
+    return result
+
+
 def parse_json_result(raw: str, agent_name: str) -> dict:
-    """Parse JSON from agent output, stripping any markdown fences."""
+    """Parse JSON from agent output, stripping any markdown fences.
+    Falls back to per-format extraction when the full JSON is truncated.
+    """
     text = raw.strip()
     # Remove ```json ... ``` wrappers if present
     if text.startswith("```"):
@@ -187,6 +329,19 @@ def parse_json_result(raw: str, agent_name: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
+        # Try closing the outer object at the truncation point
+        partial = text[: e.pos]
+        last_comma = max(partial.rfind("},\n"), partial.rfind("},\r\n"))
+        if last_comma != -1:
+            try:
+                return json.loads(partial[: last_comma + 1] + "\n}")
+            except json.JSONDecodeError:
+                pass
+        # Last resort: salvage every individually complete format block
+        recovered = _extract_complete_formats(text)
+        if recovered:
+            recovered["_truncated"] = True
+            return recovered
         return {
             "parse_error": f"Could not parse {agent_name} JSON output: {str(e)}",
             "raw": raw[:2000],
@@ -211,6 +366,14 @@ async def serve_frontend():
     if os.path.exists(html_path):
         return FileResponse(html_path)
     return HTMLResponse("<h1>Frontend not found</h1>", status_code=404)
+
+
+@app.get("/logo.png")
+async def serve_logo():
+    logo_path = os.path.join(FRONTEND_DIR, "logo.png")
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path, media_type="image/png")
+    return HTMLResponse("Logo not found", status_code=404)
 
 
 @app.get("/api/categories")
@@ -361,6 +524,20 @@ async def stream_analyst(run_id: str):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+class InsightSelection(BaseModel):
+    insights: list[int] = []
+    viral_angles: list[int] = []
+    content_hooks: list[int] = []
+
+
+@app.put("/api/runs/{run_id}/selection")
+async def save_insight_selection(run_id: str, body: InsightSelection):
+    if not get_run(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    _run_selections[run_id] = body.model_dump()
+    return {"ok": True}
+
+
 @app.get("/api/runs/{run_id}/agents/writer/stream")
 async def stream_writer(run_id: str):
     run = get_run(run_id)
@@ -373,6 +550,11 @@ async def stream_writer(run_id: str):
 
     if not scout_result or not analyst_result:
         raise HTTPException(status_code=400, detail="Scout and Analyst must run before Writer")
+
+    # Apply insight selection if the user chose specific items
+    selection = _run_selections.get(run_id)
+    if selection:
+        analyst_result = _apply_insight_selection(analyst_result, selection)
 
     async def generate():
         update_agent_result(run_id, "writer", "running")
